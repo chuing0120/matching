@@ -13,7 +13,6 @@ require('./config/passportconfig')(passport);
 var auth = require('./routes/auth');
 var member = require('./routes/member');
 var post = require('./routes/post');
-var track = require('./routes/track');
 var photo = require('./routes/photo');
 // router level middleware modules loading
 
@@ -41,7 +40,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/auth', auth);
 app.use('/members', member);
 app.use('/posts', post);
-app.use('/tracks', track);
 app.use('/photos', photo);
 
 app.use(function (req, res, next) {
@@ -69,8 +67,8 @@ if (app.get('env') === 'development') {
 app.use(function (err, req, res, next) {
     res.status(err.status || 500);
     res.json({
-        message: err.message,
-        error: {}
+        fail: err.message,
+        //error: {}
     });
 });
 
