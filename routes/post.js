@@ -6,69 +6,196 @@ var router = express.Router();
 
 // 6. 매칭/스토리 쓰기 (HTTP)     파일 업로드............?? + 구인;;;;;;;;;;
 router.post('/', function (req, res, next) {
-//관심!! 인서트(글작성) 후 인서트(관심작성)  = 트랜젝션 --;;;;;;;;;; ;;;;;;
-    var user = {
-        "id": req.user.id,//req.session.userId,       // id = user_id !!
-        "title": req.body.title,
-        "content": req.body.content,
-    };
-    //겟 커넥션 //닉넴 사진! 장르 포지션 가지고 오기?   //디비 인서트!!!!!!  유저id필수!!  //끝?!
 
-    function getConnecton(callback) {
-        pool.getConnection(function (err, connection) {
-            if (err) {
-                callback(err);
-            } else {
-                callback(null, connection);//..........
-            }   // 커넥션 얻어오고 hashPassword 바이패스... null--;;
-        });
-    }
+      var user = {
+          "id": req.user.id,//req.session.userId,       // id = user_id !!
+          "title": req.body.title,
+          "content": req.body.content,
+          "limit": req.body.limit,  //  언디파인이면 게시글
+          "decide": req.body.decide, //  값 존재 = 매칭!!
+          "genre": req.body.genre,  // 장르 받아옴
+          "position": req.body.position, // 포지션받아옴
+      };
+      var interest = [];  // + parseInt() !!!
+      //객체로 넣으면 되겠군!!!
+      function parseGenrePosition(callback) {
+
+          function each1(cb1) {
+              async.eachSeries(user.genre, function (item, cb) {
+                  interest.push({"genre": parseInt(item)});
+
+                  console.log('intrest', interest);  //됨 끝......................
+              }, function (err) {
+                  if (err) {
+                      console.log('에러1', err);//안됨??
+                      callback(err);
+                  }
+                  console.log('인터1', interest);//안나옴;;
+                  cb1();
+              });
+          };
+
+          function each2(cb2) {
+              async.eachSeries(user.position, function (item, cb) {
+                  interest.push({"position": parseInt(item)});
+                  console.log('pitem', item);//됨 망
+              }, function (err) {
+                  if (err) {
+                      console.log('에러2', err);
+                      callback(err);
+                  }
+                  console.log('인터2', interest);
+                  cb2();
+              });
+          }
+
+          async.series([each1, each2], function (err, results) {
+              if (err) {
+                  callback(err);
+              } else {
+
+                  callback(null);
+              }
+          });
+
+      }
+
+      //parseGenrePosition();되긴한데... 도중에 안되네??
+      //1개만 왔을경우? 리밋=3 디사=언디 = 0으로..   리밋?? 디사 3 ==??? 매칭?
+      // 리밋이 1보다 작은경우...=매칭..?
+      // 숫자가 아닐경우........ NaN!!!??
+      // 리밋보다 디사가 클경우...........
+
+      //겟 커넥션 //닉넴 사진! 장르 포지션 가지고 오기?   //디비 인서트!!!!!!  유저id필수!!  //끝?!
+
+      function getConnection(callback) {
+          pool.getConnection(function (err, conn) {
+              if (err) {
+                  callback(err);
+              } else {
+                  callback(null, conn);//..........
+              }
+          });
+      }
 
 //세션아이디로!!!   닉넴 (서버주소?!=클라..)사진경로 장르 포지션 가지고 오기?!!
-    function selectMember(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-        var sql = "SELECT nickname, genre, position, photo_path " +
-          "FROM matchdb.user " +
-          "WHERE id = ?";
-        connection.query(sql, [user.id], function (err, results) {
-            if (err) {
-                connection.release();
-                callback(err);
-            } else {    //어디서 봤던 코드..?
-                callback(null, connection, results);
-            }
-        });
-    }
+      function selectMember(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+          var sql = "SELECT nickname, genre, position, photo_path " +
+            "FROM matchdb.user " +
+            "WHERE id = ?";
+          connection.query(sql, [user.id], function (err, results) {
+              if (err) {
+                  connection.release();
+                  callback(err);
+              } else {    //어디서 봤던 코드..?
+                  callback(null, connection, results);
+              }
+          });
+      }
 
-//디비 인서트!!!!!!
-    function insertPost(connection, results, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-        var sql = "insert into matchdb.post (user_id, title, content) " +
-          "    values ( ?, ?, ?)";        //1=user.id
-        connection.query(sql, [user.id, user.title, user.content], function (err, results) {
-            connection.release();
-            if (err) {
-                callback(err);
-            } else {    //어디서 봤던 코드..?
-                callback(null);
-            }
-        });
-    }
+//디비 인서트!!!!!!  //기존코드 = 게시글작성
+      function insertPost(connection, results, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+          var sql = "insert into matchdb.post (user_id, title, content) " +
+            "    values ( ?, ?, ?)";        //1=user.id
+          connection.query(sql, [user.id, user.title, user.content], function (err, results) {
+              connection.release();
+              if (err) {
+                  callback(err);
+              } else {    //어디서 봤던 코드..?
+                  callback(null);
+              }
+          });
+      }
+      var insertId;
 
-    async.waterfall([getConnecton, selectMember, insertPost], function (err, result) {
-        if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
-            next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
-        } else {    //동적 프로퍼티 생성?!?!
-            var result = {
-                "success": {
-                    "message": "게시글이 작성되었습니다.",
-                    "userInput": user
-                }
-            };
-            res.json(result);        //더미!!!!응답!!!!!!
-        }
-    });
+      function insertPostInterest(connection, results, callback) {
+          connection.beginTransaction(function (err) {  //오 롤백된듯? 엥 아닌가??
+              if (err) {
+                  console.log("트렌젝션실패..");
+                  connection.release();
+                  callback(err);
+              } else {
+// todo 어싱크 이치 여기다 돌려야할듯..   배열 왜돌렸지...........
+                  function insertMatch( callback) {
+                      var sql = "INSERT into matchdb.post (user_id, title, content, limit_people, decide_people) " +
+                        "VALUES ( ?, ?, ?, ?, ?)";
+                      connection.query(sql, [user.id, user.title, user.content,
+                          user.limit, user.decide], function (err, result) {
+                          if (err) {
+                              connection.rollback();
+                              connection.release();
+                              callback(err);
+                          } else {    //어디서 봤던 코드..?
+                              insertId = result.insertId;
+                              callback(null, connection);
+                          }
+                      });
+                  }
+
+                  function insertInterest(callback) {
+                      var sql = "insert into matchdb.interest (post_id, genre, position) " +
+                        "    values ( ?, ?, ?)";
+
+                      connection.query(sql, [insertId, user.genre, user.position], function (err, results) {
+                          if (err) {
+                              connection.rollback();
+                              connection.release();
+                              callback(err);
+                          } else {    //어디서 봤던 코드..?
+                              connection.commit();
+                              connection.release();
+                              callback(null);
+                          }
+                      });
+                  }
+
+                  async.series([getConnection, insertMatch, insertInterest], function (err, results) {
+                      if (err) {
+                          callback(err);
+                      } else {
+                          callback(null);
+                      }
+                  });
 
 
-});
+              }
+          })
+      }
+
+
+      if (user.limit === undefined) { //됨
+          async.waterfall([getConnection, selectMember, insertPost], function (err, result) {
+              if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+                  next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
+              } else {    //동적 프로퍼티 생성?!?!
+                  var result = {
+                      "success": {
+                          "message": "게시글이 작성되었습니다.",
+                          "userInput": user
+                      }
+                  };
+                  res.json(result);        //더미!!!!응답!!!!!!
+              }
+          });
+      } else {
+          async.waterfall([getConnection, selectMember, insertPostInterest], function (err, result) {
+              if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+                  next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
+              } else {    //동적 프로퍼티 생성?!?!
+                  var result = {
+                      "success": {
+                          "message": "게시글이 작성되었습니다.",
+                          "userInput": user
+                      }
+                  };
+                  res.json(result);        //더미!!!!응답!!!!!!
+              }
+          });
+      }
+
+
+  }
+);
 
 // 7. 매칭/스토리 수정     파일 업로드............
 router.put('/:pid', function (req, res, next) {
@@ -104,10 +231,10 @@ router.put('/:pid', function (req, res, next) {
             if (err) {
                 callback(err);
             } else if (user.id === results[0].user_id) {    // 작성자와 삭제할 게시물의 작성자가 같은경우
-                callback(null,connection);
+                callback(null, connection);
             } else {    // 다른 경우 삭제 ㄴㄴ함
                 var err = {
-                    "message":"작성자가 아니라서 게시글을 수정할 수 없습니다."
+                    "message": "작성자가 아니라서 게시글을 수정할 수 없습니다."
                 };
                 callback(err);
             }
@@ -195,10 +322,10 @@ router.delete('/:pid', function (req, res, next) {
             if (err) {
                 callback(err);
             } else if (user.id === results[0].user_id) {    // 작성자와 삭제할 게시물의 작성자가 같은경우
-                callback(null,connection);
+                callback(null, connection);
             } else {    // 다른 경우 삭제 ㄴㄴ함
                 var err = {
-                    "message":"작성자가 아니라서 게시글을 지울 수 없습니다."
+                    "message": "작성자가 아니라서 게시글을 지울 수 없습니다."
                 };
                 callback(err);
             }
@@ -259,10 +386,10 @@ router.get('/', function (req, res, next) {
     }
 
     function selectPost(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-
+                                                  // 페이지 안들어왔을때 처리 안한듯..ㅜ
         var pageNum = req.query.page;
         var limit = 3;
-        var offset = limit * (pageNum-1);
+        var offset = limit * (pageNum - 1);
         var sql;
 
         if (keyword !== undefined) {
@@ -273,9 +400,8 @@ router.get('/', function (req, res, next) {
                       ", limit_people, decide_people " +
                       "FROM matchdb.post p join matchdb.user u on(u.id = p.user_id) " +
                       "WHERE nickname like " +
-                      connection.escape('%'+keyword+'%') + " " +
+                      connection.escape('%' + keyword + '%') + " " +
                       "LIMIT ? OFFSET ? ";// +
-                    console.log('sql=',sql);
                     break;
 
                 case 'title':
@@ -294,7 +420,7 @@ router.get('/', function (req, res, next) {
                       ", limit_people, decide_people " +
                       "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
                       "WHERE content like " +
-                      connection.escape('%'+keyword+'%') + " " +
+                      connection.escape('%' + keyword + '%') + " " +
                       "LIMIT ? OFFSET ? ";// +
                     break;
                 default:
@@ -308,8 +434,8 @@ router.get('/', function (req, res, next) {
               "LIMIT ? OFFSET ? ";// +
         }
 
-        if (flag === 'people'){
-            sql =   "SELECT p.id, title, content, nickname " +
+        if (flag === 'people') {
+            sql = "SELECT p.id, title, content, nickname " +
               ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'post_date' " +
               ", limit_people, decide_people " +
               "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
@@ -332,16 +458,16 @@ router.get('/', function (req, res, next) {
             next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
         } else {    //동적 프로퍼티 생성?!?!
             async.each(results, function iterator(result, callback) {
-                result.id +=10;
+                result.id += 10;
                 console.log(result);
                 callback(null);
-            }, function(err){
+            }, function (err) {
                 if (err) {
                     console.log('에러라니');
                 } else {
-                    console.log('던',results);
+                    console.log('던', results);
                 }
-            } );
+            });
 
             var result = {
                 "success": {
@@ -378,7 +504,7 @@ router.post('/:pid/replies', function (req, res, next) {
 
     function selectReply(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
 
-        var sql =   "INSERT into matchdb.comment (content, post_id, user_id) " +
+        var sql = "INSERT into matchdb.comment (content, post_id, user_id) " +
           "VALUES (?, ?, ?)";
 
         connection.query(sql, [req.body.content, req.params.pid, req.user.id], function (err, results) {
@@ -399,9 +525,9 @@ router.post('/:pid/replies', function (req, res, next) {
                 "success": {
                     "message": "댓이 작성되었습니다.",
                     "results": {
-                        "content":req.body.content,
-                        "pid":req.params.pid,
-                        "uid":req.user.id
+                        "content": req.body.content,
+                        "pid": req.params.pid,
+                        "uid": req.user.id
                     }
                 }
             };
@@ -432,14 +558,15 @@ router.put('/:pid/replies/:rid', function (req, res, next) {
         connection.query(sql, [req.params.rid], function (err, results) {
             if (err) {
                 callback(err);
-            } if (results.length===0) {
+            }
+            if (results.length === 0) {
                 connection.release();
                 var err = {
                     "message": "해당 댓글이 없어서 댓글을 수정할 수 없습니다."
                 };
                 callback(err);
             } else if (req.user.id === results[0].user_id || req.params.pid === results[0].post_id) {    // 작성자와 삭제할 게시물의 작성자가 같은경우
-                callback(null,connection);
+                callback(null, connection);
             } else {    // 다른 경우 삭제 ㄴㄴ함
                 connection.release();
                 var err = {
@@ -452,9 +579,9 @@ router.put('/:pid/replies/:rid', function (req, res, next) {
 
 //디비 업뎃!!!!!
     function updateReply(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-        var sql =   "UPDATE matchdb.comment " +
+        var sql = "UPDATE matchdb.comment " +
           "SET content = ? " +
-          "WHERE id = ?" ;
+          "WHERE id = ?";
 
         connection.query(sql, [req.body.content, req.params.rid], function (err, results) {
             connection.release();
@@ -502,14 +629,15 @@ router.delete('/:pid/replies/:rid', function (req, res, next) {
         connection.query(sql, [req.params.rid], function (err, results) {
             if (err) {
                 callback(err);
-            } if (results.length===0) {
+            }
+            if (results.length === 0) {
                 connection.release();
                 var err = {
                     "message": "해당 댓글이 없어서 댓글을 삭제할 수 없습니다."
                 };
                 callback(err);
             } else if (req.user.id === results[0].user_id || req.params.pid === results[0].post_id) {    // 작성자와 삭제할 게시물의 작성자가 같은경우
-                callback(null,connection);
+                callback(null, connection);
             } else {    // 다른 경우 삭제 ㄴㄴ함
                 connection.release();
                 var err = {
@@ -521,7 +649,7 @@ router.delete('/:pid/replies/:rid', function (req, res, next) {
     }
 
     function deleteReply(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-        var sql =   "DELETE " +
+        var sql = "DELETE " +
           "FROM matchdb.comment " +
           "WHERE id=?";
         connection.query(sql, [req.params.rid], function (err, results) {
@@ -564,7 +692,7 @@ router.get('/:pid/replies', function (req, res, next) {
 
     function selectReply(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
 
-        var sql =   "SELECT r.id, content, u.nickname " +
+        var sql = "SELECT r.id, content, u.nickname " +
           "         , date_format(CONVERT_TZ(comm_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'comm_date' " +
           "FROM matchdb.comment r	join matchdb.user u on(u.id = r.user_id) " +
           "ORDER BY r.id " +
@@ -572,7 +700,7 @@ router.get('/:pid/replies', function (req, res, next) {
         //   "WHERE id = ?";
         var pageNum = req.query.page;
         var limit = 3;
-        var offset = limit * (pageNum-1);
+        var offset = limit * (pageNum - 1);
 
         connection.query(sql, [limit, offset], function (err, results) {
             connection.release();
@@ -613,13 +741,12 @@ router.get('/:pid/replies', function (req, res, next) {
                 "date": "작성일시",
                 "genre": "장르",
                 "position": "포지션",
-                "nickname" : "작성자",
-                "photo" : "./public/profile/xxx.jpg",
+                "nickname": "작성자",
+                "photo": "./public/profile/xxx.jpg",
                 "pid": "매칭/스토리번호"
             }]
         }
     };
-
 
 
 });
