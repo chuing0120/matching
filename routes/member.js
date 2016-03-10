@@ -362,12 +362,11 @@ router.get('/me/tracks', function(req, res, next) {
 	var user = {
 		"cloudId": req.user.soundId,
 		"id": req.user.id
-	}
-
+	};
 	function selectTracks(connection, callback) {
 		var sql = "SELECT id, url " +
-			"FROM matchdb.tracks " +
-			"WHERE user_id = ?";
+								"FROM matchdb.tracks " +
+								"WHERE user_id = ?";
 		connection.query(sql, [user], function (err, results) {
 			connection.release();
 			if (err) {
@@ -415,7 +414,6 @@ router.post('/me/photos', isLoggedIn, function(req, res, next) {
 				"ContentType": mimeType //mime.lookup
 			}
 		});
-
 		function UploadServer(callback) {
 			var body = fs.createReadStream(files['photo'].path);
 			s3.upload({"Body": body})
@@ -434,7 +432,6 @@ router.post('/me/photos', isLoggedIn, function(req, res, next) {
 					}
 				});
 		}
-
 		function deleteS3Photo(connection, callback) {
 			var userId = req.user.id;
 			var sql = "SELECT photo_path " +
@@ -505,6 +502,9 @@ router.post('/me/photos', isLoggedIn, function(req, res, next) {
 
 	});
 });
+// 20. 트랙정보 동기화 = 기존정보 삭제 + 새로운 정보 인서트 = 트렌잭션 ㄱㄱ
+router.post('')
+
 
 //http://api.soundcloud.com/users/208610688/tracks?client_id=71968fd976cc5c0693a7d6b76ea05213
 // 내꺼 user id 트랙정보 보는 api
