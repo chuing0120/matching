@@ -4,6 +4,7 @@ var bcrypt = require('bcrypt');
 
 var router = express.Router();
 
+
 // 6. 매칭/스토리 쓰기 (HTTP)     파일 업로드............?? + 구인;;;;;;;;;;
 router.post('/', function (req, res, next) {
 //관심!! 인서트(글작성) 후 인서트(관심작성)  = 트랜젝션 --;;;;;;;;;; ;;;;;;
