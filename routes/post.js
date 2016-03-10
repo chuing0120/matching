@@ -59,7 +59,7 @@ router.post('/', function (req, res, next) {
           });
 
       }
-      var connection;
+
       //parseGenrePosition();되긴한데... 도중에 안되네??
       //1개만 왔을경우? 리밋=3 디사=언디 = 0으로..   리밋?? 디사 3 ==??? 매칭?
       // 리밋이 1보다 작은경우...=매칭..?
@@ -109,15 +109,13 @@ router.post('/', function (req, res, next) {
       var insertId;
 
       function insertPostInterest(connection, results, callback) {
-          // todo 어싱크 이치 여기다 돌려야할듯..   배열 왜돌렸지...........
-
           connection.beginTransaction(function (err) {  //오 롤백된듯? 엥 아닌가??
               if (err) {
                   console.log("트렌젝션실패..");
                   connection.release();
                   callback(err);
               } else {
-
+// todo 어싱크 이치 여기다 돌려야할듯..   배열 왜돌렸지...........
                   function insertMatch( callback) {
                       var sql = "INSERT into matchdb.post (user_id, title, content, limit_people, decide_people) " +
                         "VALUES ( ?, ?, ?, ?, ?)";
@@ -158,13 +156,15 @@ router.post('/', function (req, res, next) {
                           callback(null);
                       }
                   });
+
+
               }
           })
       }
 
 
       if (user.limit === undefined) { //됨
-          async.waterfall([getConnecton, selectMember, insertPost], function (err, result) {
+          async.waterfall([getConnection, selectMember, insertPost], function (err, result) {
               if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
                   next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
               } else {    //동적 프로퍼티 생성?!?!
