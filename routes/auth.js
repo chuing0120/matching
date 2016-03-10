@@ -32,8 +32,12 @@ router.post('/login', function(req, res, next) {
             }
         })(req, res, next);
     } else {
-        var err = new Error('SSL/TLS Upgrade Required');
-        err.status = 426;
+        var err = new Error();
+        err.message = {
+                 "message" : "SSL/TLS Upgrade Required"
+        };
+        //var err = new Error('SSL/TLS Upgrade Required');
+        //err.status = 426;
         next(err);
     }
 });
@@ -47,27 +51,27 @@ router.post('/logout', function(req, res, next) {
 // 15. 연동로그인 (HTTPS)
 router.get('/soundcloud',  passport.authenticate('soundcloud'));
 router.get('/soundcloud/callback',function(req, res, next) {
-    passport.authenticate('soundcloud',{ failureRedirect: '/login' },
-    function(err, user, info) {
-        if (err) {
-            next(err);
-        } else {
-            req.logIn(user, function(err) {
-                if (err) {
-                    console.log(err);
-                    next(err);
-                } else {
-                    var result = {
-                        "success": {
-                            "message": "연동로그인이 되었습니다."
-                        }
-                    };
-                    res.json(result);
-                    //res.json(user);
-                }
-            });
-        }
-    })(req, res, next);
+    passport.authenticate('soundcloud', {failureRedirect: '/login'},
+      function (err, user, info) {
+          if (err) {
+              next(err);
+          } else {
+              req.logIn(user, function (err) {
+                  if (err) {
+                      console.log(err);
+                      next(err);
+                  } else {
+                      var result = {
+                          "success": {
+                              "message": "연동로그인이 되었습니다."
+                          }
+                      };
+                      res.json(result);
+                      //res.json(user);
+                  }
+              });
+          }
+      })(req, res, next);
 });
 
 module.exports = router;
