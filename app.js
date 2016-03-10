@@ -14,6 +14,7 @@ var auth = require('./routes/auth');
 var member = require('./routes/member');
 var post = require('./routes/post');
 var photo = require('./routes/photo');
+var track = require('./routes/track');
 // router level middleware modules loading
 
 var app = express();
@@ -41,6 +42,7 @@ app.use('/auth', auth);
 app.use('/members', member);
 app.use('/posts', post);
 app.use('/photos', photo);
+app.use('/tracks', track);
 
 app.use(function (req, res, next) {
     var err = new Error('Not Found');
