@@ -392,7 +392,7 @@ router.get('/me/tracks', function(req, res, next) {
 	});
 });
 // 19. 프로필사진 업로드
-router.post('/me/photos', isLoggedIn, function(req, res, nex) {
+router.post('/me/photos', isLoggedIn, function(req, res, next) {
 	var userId = req.user.id;
 
 	var form = new formidable.IncomingForm();
