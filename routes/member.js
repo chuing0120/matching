@@ -1,6 +1,5 @@
 var express = require('express');
 var async = require('async');
-var bcrypt = require('bcrypt');
 var formidable = require('formidable');
 var AWS = require('aws-sdk');
 var mime = require('mime');
@@ -33,7 +32,7 @@ function getConnection(callback) {
 }
 
 // 1. 회원가입 (HTTPS)
-router.post('/', function(req, res, next) {
+router.post('/', function (req, res, next) {
 	if (req.secure) {
 		var username = req.body.username;
 		var nickname = req.body.nickname;
@@ -41,9 +40,9 @@ router.post('/', function(req, res, next) {
 
 		function selectUsername(connection, callback) {
 			var sql = "SELECT id " +
-									"FROM matchdb.user " +
-									"WHERE username = ?";
-			connection.query(sql, [username], function(err, results) {
+				"FROM matchdb.user " +
+				"WHERE username = ?";
+			connection.query(sql, [username], function (err, results) {
 				if (err) {
 					connection.release();
 					callback(err);
@@ -59,11 +58,12 @@ router.post('/', function(req, res, next) {
 				}
 			});
 		}
+
 		function selectNickname(connection, callback) {
 			var sql = "SELECT id " +
 				"FROM matchdb.user " +
 				"WHERE nickname = ?";
-			connection.query(sql, [nickname], function(err, results) {
+			connection.query(sql, [nickname], function (err, results) {
 				if (err) {
 					connection.release();
 					callback(err);
@@ -79,6 +79,7 @@ router.post('/', function(req, res, next) {
 				}
 			});
 		}
+
 		function generateSalt(connection, callback) {
 			var rounds = 10;
 			bcrypt.genSalt(rounds, function (err, salt) {
@@ -89,6 +90,7 @@ router.post('/', function(req, res, next) {
 				}
 			})
 		}
+
 		function generateHashPassword(salt, connection, callback) {
 			bcrypt.hash(password, salt, function (err, hashPassword) {
 				if (err) {
@@ -98,15 +100,16 @@ router.post('/', function(req, res, next) {
 				}
 			});
 		}
+
 		function insertMember(hashPassword, connection, callback) {
 			var sql = "INSERT INTO matchdb.user (username, nickname, password) " +
-									"VALUES (?, ?, ?)";
+				"VALUES (?, ?, ?)";
 			connection.query(sql, [username, nickname, hashPassword], function (err, result) {
 				connection.release();
 				if (err) {
 					callback(err);
 				} else {
-					callback(null, { "id": result.insertId 	});
+					callback(null, {"id": result.insertId});
 				}
 			})
 		}
@@ -116,26 +119,26 @@ router.post('/', function(req, res, next) {
 		next(err);
 	}
 	async.waterfall([getConnection, selectUsername, selectNickname, generateSalt,
-		               generateHashPassword, insertMember], function (err, result) {
+		generateHashPassword, insertMember], function (err, result) {
 		if (err) {
 			next(err);
 		} else {
 			var data = {
-				success : "가입이 정상적으로 처리되었습니다."
+				success: "가입이 정상적으로 처리되었습니다."
 			}
 			res.json(data);
 		}
 	});
 });
 // 3. 내 프로필 조회 (HTTPS)
-router.get('/me', isLoggedIn, function(req, res, next) {
+router.get('/me', isLoggedIn, function (req, res, next) {
 	if (req.secure) {
 		var userId = req.user.id;
 
 		function selectMember(connection, callback) {
 			var sql = "SELECT username, photo_path, nickname, intro, genre, position " +
-									"FROM matchdb.user " +
-									"WHERE id = ?";
+				"FROM matchdb.user " +
+				"WHERE id = ?";
 			connection.query(sql, [userId], function (err, results) {
 				connection.release();
 				if (err) {
@@ -145,19 +148,20 @@ router.get('/me', isLoggedIn, function(req, res, next) {
 				}
 			})
 		}
-	async.waterfall([getConnection, selectMember], function (err, result) {
-		if (err) {
-			next(err);
-		} else {
-			var data = {
-				"success" : {
-						"message" : "회원프로필 정보가 정상적으로 조회되었습니다",
-					"data" : result
-				}
-			};
-			res.json(data);
-		}
-	});
+
+		async.waterfall([getConnection, selectMember], function (err, result) {
+			if (err) {
+				next(err);
+			} else {
+				var data = {
+					"success": {
+						"message": "회원프로필 정보가 정상적으로 조회되었습니다",
+						"data": result
+					}
+				};
+				res.json(data);
+			}
+		});
 	} else {
 		var err = new Error('SSL/TLS Upgrade Required');
 		err.status = 426;
@@ -165,16 +169,17 @@ router.get('/me', isLoggedIn, function(req, res, next) {
 	}
 });
 // 4. 다른 프로필 보기 (HTTPS)
-router.get('/:mid', function(req, res, next) {
+router.get('/:mid', function (req, res, next) {
 	if (req.secure) {
 		var user = {
 			"id": req.user.id,
 			"mid": req.params.mid
 		}
+
 		function selectMember(connection, callback) {
 			var sql = "SELECT username, photo_path, nickname, intro, genre, position " +
-									"FROM matchdb.user " +
-									"WHERE id = ?";
+				"FROM matchdb.user " +
+				"WHERE id = ?";
 			connection.query(sql, [user.mid], function (err, results) {
 				connection.release();
 				if (err) {
@@ -184,18 +189,19 @@ router.get('/:mid', function(req, res, next) {
 				}
 			})
 		}
-	async.waterfall([getConnection, selectMember], function (err, result) {
-		if (err) {
-			err.message = "회원프로필 조회가 실패하였습니다.";
-			next(err);
-		} else {
-			var data = {
-				message : "회원프로필 정보가 정상적으로 조회되었습니다",
-				success : result
+
+		async.waterfall([getConnection, selectMember], function (err, result) {
+			if (err) {
+				err.message = "회원프로필 조회가 실패하였습니다.";
+				next(err);
+			} else {
+				var data = {
+					message: "회원프로필 정보가 정상적으로 조회되었습니다",
+					success: result
+				}
+				res.json(data);
 			}
-			res.json(data);
-		}
-	});
+		});
 	} else {
 		var err = new Error('SSL/TLS Upgrade Required');
 		err.status = 426;
@@ -215,15 +221,15 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 
 		function SelectUsername(connection, callback) {
 			var sql = "SELECT id " +
-								"FROM matchdb.user " +
-								"WHERE username = ?";
-			connection.query(sql, [username], function(err, results) {
+				"FROM matchdb.user " +
+				"WHERE username = ?";
+			connection.query(sql, [username], function (err, results) {
 				if (err) {
 					connection.release();
 					callback(err);
 				} else {
 					if (results.length) {
-						if(req.user.id !== results[0].id) {
+						if (req.user.id !== results[0].id) {
 							//connection.release(); //조심할것 아래에서 그냥 넘어감...=  수정 ㄷㄷ = 릴리즈터짐
 							console.log('ssss다른아이디 존재');
 							var err = new Error('다른 아이디가 이미 존재하고 있습니다.');
@@ -240,17 +246,18 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 				}
 			});
 		}
+
 		function SelectNickname(connection, callback) {
 			var sql = "SELECT id " +
 				"FROM matchdb.user " +
 				"WHERE nickname = ?";
-			connection.query(sql, [nickname], function(err, results) {
+			connection.query(sql, [nickname], function (err, results) {
 				if (err) {
 					connection.release();
 					callback(err);
 				} else {
 					if (results.length) {
-						if(req.user.id !== results[0].id) {
+						if (req.user.id !== results[0].id) {
 							//connection.release(); //조심할것 아래에서 그냥 넘어감...=  수정 ㄷㄷ = 릴리즈터짐
 							console.log('ssss다른닉네임 존재');
 							var err = new Error('다른 닉네임이 이미 존재하고 있습니다.');
@@ -267,9 +274,10 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 				}
 			});
 		}
+
 		function generateSalt(connection, callback) {
 			var rounds = 10;
-			bcrypt.genSalt(rounds, function(err, salt) {
+			bcrypt.genSalt(rounds, function (err, salt) {
 				if (err) {
 					callback(err);
 				} else {
@@ -277,8 +285,9 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 				}
 			});
 		}
+
 		function generateHashPassword(salt, connection, callback) {
-			bcrypt.hash(password, salt, function(err, hashPassword) {
+			bcrypt.hash(password, salt, function (err, hashPassword) {
 				if (err) {
 					callback(err);
 				} else {
@@ -286,10 +295,11 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 				}
 			});
 		}
+
 		function UpdateMember(hashPassword, connection, callback) {
 			var sql = "UPDATE user " +
-									"SET username=?, password=? , nickname=?, intro=?, genre=?, position=? " +
-									"WHERE id = ?";
+				"SET username=?, password=? , nickname=?, intro=?, genre=?, position=? " +
+				"WHERE id = ?";
 
 			//username = (username === null) ? results[0].username : username;
 			//password = (password === null) ? results[0].password : password;
@@ -308,17 +318,18 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 					}
 				});
 		}
-	async.waterfall([getConnection, SelectUsername, SelectNickname, generateSalt, generateHashPassword, UpdateMember], function (err, result) {
-		if (err) {
-			next(err);
-		} else {
-			var data = {
-				"message" : "회원 프로필 수정이 정상적으로 처리되었습니다.",
-				"success" : result
-			};
-			res.json(data);
-		}
-	});
+
+		async.waterfall([getConnection, SelectUsername, SelectNickname, generateSalt, generateHashPassword, UpdateMember], function (err, result) {
+			if (err) {
+				next(err);
+			} else {
+				var data = {
+					"message": "회원 프로필 수정이 정상적으로 처리되었습니다.",
+					"success": result
+				};
+				res.json(data);
+			}
+		});
 	} else {
 		var err = new Error('SSL/TLS Upgrade Required');
 		err.status = 426;
@@ -328,14 +339,14 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 // 16. 연동회원 트랙 상세목록 보기 (HTTP)
 router.get('/:mid/tracks', function (req, res, next) {
 	var user = {
-		"soundId" : req.user.cloudId,
-		"mid" : req.params.mid
+		"soundId": req.user.cloudId,
+		"mid": req.params.mid
 	}
 
 	function selectTracks(connection, callback) {
 		var sql = "SELECT id, url " +
-							"FROM matchdb.tracks " +
-							"WHERE user_id = ?";
+			"FROM matchdb.tracks " +
+			"WHERE user_id = ?";
 		connection.query(sql, [user], function (err, results) {
 			connection.release();
 			if (err) {
@@ -345,28 +356,30 @@ router.get('/:mid/tracks', function (req, res, next) {
 			}
 		})
 	}
+
 	async.waterfall([getConnection, selectTracks], function (err, result) {
 		if (err) {
 			next(err);
 		} else {
 			var data = {
-				message : "연동정보(트랙) 불러오기 성공",
-				success : result
+				message: "연동정보(트랙) 불러오기 성공",
+				success: result
 			};
 			res.json(data);
 		}
 	});
 });
 // 18. 내 트랙 상세목록 보기 (HTTP)
-router.get('/me/tracks', function(req, res, next) {
+router.get('/me/tracks', function (req, res, next) {
 	var user = {
 		"cloudId": req.user.soundId,
 		"id": req.user.id
 	};
+
 	function selectTracks(connection, callback) {
 		var sql = "SELECT id, url " +
-								"FROM matchdb.tracks " +
-								"WHERE user_id = ?";
+			"FROM matchdb.tracks " +
+			"WHERE user_id = ?";
 		connection.query(sql, [user], function (err, results) {
 			connection.release();
 			if (err) {
@@ -376,6 +389,7 @@ router.get('/me/tracks', function(req, res, next) {
 			}
 		})
 	}
+
 	async.waterfall([getConnection, selectTracks], function (err, result) {
 		if (err) {
 			next(err);
@@ -391,7 +405,7 @@ router.get('/me/tracks', function(req, res, next) {
 	});
 });
 // 19. 프로필사진 업로드
-router.post('/me/photos', isLoggedIn, function(req, res, next) {
+router.post('/me/photos', isLoggedIn, function (req, res, next) {
 	var userId = req.user.id;
 
 	var form = new formidable.IncomingForm();
@@ -414,6 +428,7 @@ router.post('/me/photos', isLoggedIn, function(req, res, next) {
 				"ContentType": mimeType //mime.lookup
 			}
 		});
+
 		function UploadServer(callback) {
 			var body = fs.createReadStream(files['photo'].path);
 			s3.upload({"Body": body})
@@ -432,6 +447,7 @@ router.post('/me/photos', isLoggedIn, function(req, res, next) {
 					}
 				});
 		}
+
 		function deleteS3Photo(connection, callback) {
 			var userId = req.user.id;
 			var sql = "SELECT photo_path " +
@@ -486,14 +502,15 @@ router.post('/me/photos', isLoggedIn, function(req, res, next) {
 				}
 			})
 		}
+
 // 삭제후 업로드!!   선삭제 후업롣   왜냐면 삭제 에러시 못올리게하려고!!
 		async.waterfall([UploadServer, getConnection, deleteS3Photo, updatePhoto], function (err, result) {
 			if (err) {
 				next(err);
 			} else {
 				var data = {
-					"success" : {
-						"message" : "프로필 사진이 업로드 되었습니다."
+					"success": {
+						"message": "프로필 사진이 업로드 되었습니다."
 					}
 				};
 				res.json(data);
