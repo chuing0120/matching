@@ -11,7 +11,8 @@ router.post('/login', function (req, res, next) {
 			if (err) {
 				next(err);
 			} else if (!user) {
-				var err = new Error('비밀번호를 다시 확인하세요.');
+				var err = new Error();
+				err.message='비밀번호를 다시 확인하세요.';
 				err.status = 401;
 				next(err);
 			} else {
@@ -22,8 +23,8 @@ router.post('/login', function (req, res, next) {
 					} else {
 						var result = {
 							"success": {
-								"id" : user.id,
-								"message": "로그인이 되었습니다"
+								"message": "로그인이 되었습니다",
+								"id" : user.id
 							}
 						};
 						res.json(result);
@@ -33,22 +34,28 @@ router.post('/login', function (req, res, next) {
 		})(req, res, next);
 	} else {
 		var err = new Error();
-		err.message = {
-			"message": "SSL/TLS Upgrade Required"
-		};
-		//var err = new Error('SSL/TLS Upgrade Required');
-		//err.status = 426;
+		err.message = "SSL/TLS Upgrade Required";
+		err.status = 426;
 		next(err);
 	}
 });
-// 18. 로그아웃
+// 18. 로그아웃 (HTTPS)
 router.post('/logout', function (req, res, next) {
-	req.logout();
-	res.json({
-		"sucess": "로그아웃 되었습니다..."
-	});
+	if (req.secure) {
+		req.logout();
+		res.json({
+			"success": {
+				"message": "로그아웃 되었습니다..."
+			}
+		});
+	} else {
+		var err = new Error();
+		err.message = "SSL/TLS Upgrade Required";
+		err.status = 426;
+		next(err);
+	}
 });
-// 15. 연동로그인 (HTTPS)
+// 15. 연동로그인 (HTTP)
 router.get('/soundcloud', passport.authenticate('soundcloud'));
 router.get('/soundcloud/callback', function (req, res, next) {
 	passport.authenticate('soundcloud', {failureRedirect: '/login'},
@@ -63,8 +70,8 @@ router.get('/soundcloud/callback', function (req, res, next) {
 					} else {
 						var result = {
 							"success": {
-								"cloud_id" : user.cloudId,
-								"message": "연동로그인이 되었습니다."
+								"message": "연동로그인이 되었습니다.",
+								"cloud_id" : user.cloudId
 							}
 						};
 						res.json(result);
