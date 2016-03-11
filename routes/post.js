@@ -165,7 +165,6 @@ router.post('/', function (req, res, next) {
 
                   }
 
-
                   async.series([parseGenrePosition, getConnection, insertMatch, insertInterests], function (err, results) {
                       if (err) {
                           callback(err);
