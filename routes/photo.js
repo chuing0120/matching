@@ -75,6 +75,18 @@ router.post('/', isLoggedIn, function(req, res, next) {
         if (err) {
           callback(err);
         } else {
+
+
+          // 여러개url db업뎃ㄴㄴ = 딜리트+인서트 ㅜㅜ + 이치 + 트랜젝션?!
+          // todo 0 뉴s3업로드 후 뉴링크 갖고있고 === results!!
+
+
+          // todo 1. 뉴링크 인서트..ㅇㅇ(트랜젝션실패시 기존데이터가 되므로 s3삭제처리용)    //(인서트실패 = 뉴업로드 삭제 ㅜㅜㅜㅜ ) 삭제실패=망ㅜㅜㅜㅜㅜ= 로그찍어야겠네 ㅜㅜ
+          //todo 1-2. 기존db셀렉(뉴링크 아닌것!!!! ㅋㅋㅋㅋ ) = 기존URL 가져옴 s3지우려고 ㅇㅇ..(실패시 커밋ㅋㅋㅋㅋㅋㅋ)
+
+          // todo 2 &셀렉결과로 기존s3삭제 ㅇㅇ(실패시 커밋ㅇㅇ (뉴링크->기존링크화 !!))
+          // todo 3. "0-1.에서 셀렉했던" 기존db(뉴링크는 살아있게됨)  삭제(실패=커밋 ㅇㅇ=뉴업로드URL저장용) 성공도 커밋 ㅇㅇ
+
           function updatePhoto(connection, callback) { //
             var sql = "UPDATE matchdb.user " +
                       "SET photo_path= ? " +
@@ -90,8 +102,8 @@ router.post('/', isLoggedIn, function(req, res, next) {
               }
             })
           }
-          //})
-          async.waterfall([getConnection, updatePhoto],function(err, result) {
+
+          async.waterfall([getConnection],function(err, result) {
             if (err) {
               next(err);
             } else {
