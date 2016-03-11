@@ -7,6 +7,8 @@ var path = require('path');
 var s3Config = require('../config/s3Config');
 var async = require('async');
 var fs = require('fs');
+var request = require('request');
+
 var router = express.Router();
 
 // 로그인되야지만 인증
@@ -40,8 +42,8 @@ router.post('/', function (req, res, next) {
 
 		function selectUsername(connection, callback) {
 			var sql = "SELECT id " +
-				"FROM matchdb.user " +
-				"WHERE username = ?";
+								"FROM matchdb.user " +
+								"WHERE username = ?";
 			connection.query(sql, [username], function (err, results) {
 				if (err) {
 					connection.release();
@@ -336,74 +338,100 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 		next(err);
 	}
 });
-// 16. 연동회원 트랙 상세목록 보기 (HTTP)
-router.get('/:mid/tracks', function (req, res, next) {
-	var user = {
-		"soundId": req.user.cloudId,
-		"mid": req.params.mid
-	}
-
-	function selectTracks(connection, callback) {
-		var sql = "SELECT id, url " +
-			"FROM matchdb.tracks " +
-			"WHERE user_id = ?";
-		connection.query(sql, [user], function (err, results) {
-			connection.release();
-			if (err) {
-				callback(err)
-			} else {
-				callback(null, results);
-			}
-		})
-	}
-
-	async.waterfall([getConnection, selectTracks], function (err, result) {
-		if (err) {
-			next(err);
-		} else {
-			var data = {
-				message: "연동정보(트랙) 불러오기 성공",
-				success: result
-			};
-			res.json(data);
-		}
-	});
-});
 // 18. 내 트랙 상세목록 보기 (HTTP)
 router.get('/me/tracks', function (req, res, next) {
-	var user = {
-		"cloudId": req.user.soundId,
-		"id": req.user.id
-	};
+		var userId = req.user.id;
 
-	function selectTracks(connection, callback) {
-		var sql = "SELECT id, url " +
-			"FROM matchdb.tracks " +
-			"WHERE user_id = ?";
-		connection.query(sql, [user], function (err, results) {
+	function selectMember(connection, callback) {
+		var sql = "SELECT cloud_id " +
+							"FROM matchdb.user " +
+							"WHERE id = ?";
+		connection.query(sql, [userId], function (err, results) {
+			console.log('bbbbbbbbb',results);
 			connection.release();
 			if (err) {
-				callback(err)
+				callback(err);
 			} else {
-				callback(null, results);
+				callback(null, connection, results);
 			}
-		})
+		});
+	}
+	function selectAPI(connection, results, callback) {
+		request('http://api.soundcloud.com/users/' + results[0].cloud_id + '/tracks?client_id=71968fd976cc5c0693a7d6b76ea05213',
+			function (error, response, body) {
+				var body = JSON.parse(body);
+
+				if (!error && response.statusCode == 200) {
+					callback(null, body);
+				} else {
+					callback();
+				}
+			});
 	}
 
-	async.waterfall([getConnection, selectTracks], function (err, result) {
+	async.waterfall([getConnection, selectMember, selectAPI], function (err, results) {
 		if (err) {
 			next(err);
 		} else {
 			var data = {
 				"success": {
-					"message": "내 연동정보(트랙) 불러오기 성공",
-					"data": result
+					"message": "내 연동정보(트랙) 불러오기 성공되었습니다.",
+					"data": results
 				}
 			};
-			res.json(data);
 		}
+		res.json(data)
 	});
 });
+
+// 16. 연동회원 트랙 상세목록 보기 (HTTP)
+router.get('/:mid/tracks', function (req, res, next) {
+	var mid = req.params.mid;
+	console.log('aaaaaaaaa',mid);
+
+	function selectMember(connection, callback) {
+		var sql = "SELECT cloud_id " +
+								"FROM matchdb.user " +
+								"WHERE id = ?";
+		connection.query(sql,[mid], function (err, results) {
+			console.log('aaaaaaaaa',results);
+			connection.release();
+			if (err) {
+				callback(err);
+			} else {
+				callback(null, connection, results);
+			}
+		});
+	}
+	// your function definition code is here and exe
+	function selectAPI(connection, results, callback) {
+		request('http://api.soundcloud.com/users/' + results[0].cloud_id + '/tracks?client_id=71968fd976cc5c0693a7d6b76ea05213',
+			function (error, response, body) {
+				var body = JSON.parse(body);
+
+				if (!error && response.statusCode == 200) {
+					callback(null, body);
+				} else {
+					callback();
+				}
+			});
+	}
+
+	async.waterfall([getConnection, selectMember, selectAPI], function (err, results) {
+		if (err) {
+			next(err);
+		} else {
+			var data = {
+				"success": {
+					"message": "연동정보(트랙) 불러오기 성공되었습니다.",
+					"data": results
+				}
+			};
+		}
+		res.json(data)
+	});
+});
+
 // 19. 프로필사진 업로드
 router.post('/me/photos', isLoggedIn, function (req, res, next) {
 	var userId = req.user.id;
@@ -522,5 +550,352 @@ router.post('/me/photos', isLoggedIn, function (req, res, next) {
 
 //http://api.soundcloud.com/users/208610688/tracks?client_id=71968fd976cc5c0693a7d6b76ea05213
 // 내꺼 user id 트랙정보 보는 api
+// 20. 트랙정보 동기화 = 기존정보 삭제 + 새로운 정보 인서트 = 트렌잭션 ㄱㄱ (HTTPS)
+router.post('/', isLoggedIn, function (req, res, next) {
+	var userId = req.user.id;
+	var track = req.body.track;
+	if (req.secure) {
+		function synchronization(connection, callback) {
+			connection.beginTransaction(function (err) {
+				if (err) {
+					connection.release();
+					callback(err);
+				} else {
+					function deleteTrack(callback) {
+						if (err) {
+							connection.release();
+							callback(err);
+						} else {
+							var sql = "DELETE FROM matchdb.tracks " +
+								"WHERE user_id = ?";
+							connection.query(sql, [userId], function (err, results) {
+								if (err) {
+									console.log('delete 에러');
+									connection.release();
+									callback(err);
+								} else {
+									console.log('삭제될 트랙', results);
+									callback(null);
+								}
+							});
+						}
+					}
+
+					function insertTrack(callback) {
+						if (err) {
+							connection.release();
+							callback(err);
+						} else {
+							var sql = "INSERT INTO matchdb.tracks (url, user_id) " +
+								"VALUES (?, ?)";
+							connection.query(sql, [track, userId], function (err, results) {
+								console.log('results', results);
+								if (err) {
+									console.log('insert 에러');
+									connection.rollback();
+									connection.release();
+									callback(err);
+								} else {
+									connection.commit();
+									connection.release();
+									console.log('추가될 트랙', results);
+									callback(null);
+								}
+							});
+						}
+					}
+
+					async.series([deleteTrack, insertTrack], function (err, result) {
+						if (err) {
+							callback(err);
+						} else {
+							callback(null, result);
+						}
+					});
+
+				}
+			});
+		}
+
+		async.waterfall([getConnection, synchronization], function (err, results) {
+			if (err) {
+				err.message = "트랙 동기화 실패";
+				next(err);
+			} else {
+				var data = {
+					"success": {
+						"message": "트랙 동기화 성공"
+					}
+				};
+				res.json(data);
+			}
+		})
+	} else {
+		var err = new Error('SSL/TLS Upgrade Required');
+		err.status = 426;
+		next(err);
+	}
+});
+
+// 20. 트랙정보 동기화 = 기존정보 삭제 + 새로운 정보 인서트 = 트렌잭션 ㄱㄱ (HTTPS)
+router.post('/', isLoggedIn, function (req, res, next) {
+	var userId = req.user.id;
+	var track = req.body.track;
+	if (req.secure) {
+		function synchronization(connection, callback) {
+			connection.beginTransaction(function (err) {
+				if (err) {
+					connection.release();
+					callback(err);
+				} else {
+					function deleteTrack(callback) {
+						if (err) {
+							connection.release();
+							callback(err);
+						} else {
+							var sql = "DELETE FROM matchdb.tracks " +
+								"WHERE user_id = ?";
+							connection.query(sql, [userId], function (err, results) {
+								if (err) {
+									console.log('delete 에러');
+									connection.release();
+									callback(err);
+								} else {
+									console.log('삭제될 트랙', results);
+									callback(null);
+								}
+							});
+						}
+					}
+
+					function insertTrack(callback) {
+						if (err) {
+							connection.release();
+							callback(err);
+						} else {
+							var sql = "INSERT INTO matchdb.tracks (url, user_id) " +
+								"VALUES (?, ?)";
+							connection.query(sql, [track, userId], function (err, results) {
+								console.log('results', results);
+								if (err) {
+									console.log('insert 에러');
+									connection.rollback();
+									connection.release();
+									callback(err);
+								} else {
+									connection.commit();
+									connection.release();
+									console.log('추가될 트랙', results);
+									callback(null);
+								}
+							});
+						}
+					}
+
+					async.series([deleteTrack, insertTrack], function (err, result) {
+						if (err) {
+							callback(err);
+						} else {
+							callback(null, result);
+						}
+					});
+
+				}
+			});
+		}
+
+		async.waterfall([getConnection, synchronization], function (err, results) {
+			if (err) {
+				err.message = "트랙 동기화 실패";
+				next(err);
+			} else {
+				var data = {
+					"success": {
+						"message": "트랙 동기화 성공"
+					}
+				};
+				res.json(data);
+			}
+		})
+	} else {
+		var err = new Error('SSL/TLS Upgrade Required');
+		err.status = 426;
+		next(err);
+	}
+});
+
+// 20. 트랙정보 동기화 = 기존정보 삭제 + 새로운 정보 인서트 = 트렌잭션 ㄱㄱ (HTTPS)
+router.post('/', isLoggedIn, function (req, res, next) {
+	var userId = req.user.id;
+	var track = req.body.track;
+	if (req.secure) {
+		function synchronization(connection, callback) {
+			connection.beginTransaction(function (err) {
+				if (err) {
+					connection.release();
+					callback(err);
+				} else {
+					function deleteTrack(callback) {
+						if (err) {
+							connection.release();
+							callback(err);
+						} else {
+							var sql = "DELETE FROM matchdb.tracks " +
+								"WHERE user_id = ?";
+							connection.query(sql, [userId], function (err, results) {
+								if (err) {
+									console.log('delete 에러');
+									connection.release();
+									callback(err);
+								} else {
+									console.log('삭제될 트랙', results);
+									callback(null);
+								}
+							});
+						}
+					}
+
+					function insertTrack(callback) {
+						if (err) {
+							connection.release();
+							callback(err);
+						} else {
+							var sql = "INSERT INTO matchdb.tracks (url, user_id) " +
+								"VALUES (?, ?)";
+							connection.query(sql, [track, userId], function (err, results) {
+								console.log('results', results);
+								if (err) {
+									console.log('insert 에러');
+									connection.rollback();
+									connection.release();
+									callback(err);
+								} else {
+									connection.commit();
+									connection.release();
+									console.log('추가될 트랙', results);
+									callback(null);
+								}
+							});
+						}
+					}
+
+					async.series([deleteTrack, insertTrack], function (err, result) {
+						if (err) {
+							callback(err);
+						} else {
+							callback(null, result);
+						}
+					});
+
+				}
+			});
+		}
+
+		async.waterfall([getConnection, synchronization], function (err, results) {
+			if (err) {
+				err.message = "트랙 동기화 실패";
+				next(err);
+			} else {
+				var data = {
+					"success": {
+						"message": "트랙 동기화 성공"
+					}
+				};
+				res.json(data);
+			}
+		})
+	} else {
+		var err = new Error('SSL/TLS Upgrade Required');
+		err.status = 426;
+		next(err);
+	}
+});
+
+// 20. 트랙정보 동기화 = 기존정보 삭제 + 새로운 정보 인서트 = 트렌잭션 ㄱㄱ (HTTPS)
+//router.post('/', isLoggedIn, function (req, res, next) {
+//	var userId = req.user.id;
+//	var track = req.body.track;
+//	if (req.secure) {
+//		function synchronization(connection, callback) {
+//			connection.beginTransaction(function (err) {
+//				if (err) {
+//					connection.release();
+//					callback(err);
+//				} else {
+//					function deleteTrack(callback) {
+//						if (err) {
+//							connection.release();
+//							callback(err);
+//						} else {
+//							var sql = "DELETE FROM matchdb.tracks " +
+//								"WHERE user_id = ?";
+//							connection.query(sql, [userId], function (err, results) {
+//								if (err) {
+//									console.log('delete 에러');
+//									connection.release();
+//									callback(err);
+//								} else {
+//									console.log('삭제될 트랙', results);
+//									callback(null);
+//								}
+//							});
+//						}
+//					}
+//
+//					function insertTrack(callback) {
+//						if (err) {
+//							connection.release();
+//							callback(err);
+//						} else {
+//							var sql = "INSERT INTO matchdb.tracks (url, user_id) " +
+//								"VALUES (?, ?)";
+//							connection.query(sql, [track, userId], function (err, results) {
+//								console.log('results', results);
+//								if (err) {
+//									console.log('insert 에러');
+//									connection.rollback();
+//									connection.release();
+//									callback(err);
+//								} else {
+//									connection.commit();
+//									connection.release();
+//									console.log('추가될 트랙', results);
+//									callback(null);
+//								}
+//							});
+//						}
+//					}
+//
+//					async.series([deleteTrack, insertTrack], function (err, result) {
+//						if (err) {
+//							callback(err);
+//						} else {
+//							callback(null, result);
+//						}
+//					});
+//
+//				}
+//			});
+//		}
+//
+//		async.waterfall([getConnection, synchronization], function (err, results) {
+//			if (err) {
+//				err.message = "트랙 동기화 실패";
+//				next(err);
+//			} else {
+//				var data = {
+//					"success": {
+//						"message": "트랙 동기화 성공"
+//					}
+//				};
+//				res.json(data);
+//			}
+//		})
+//	} else {
+//		var err = new Error('SSL/TLS Upgrade Required');
+//		err.status = 426;
+//		next(err);
+//	}
+//});
 
 module.exports = router;

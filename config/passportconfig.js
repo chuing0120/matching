@@ -106,6 +106,7 @@ module.exports = function (passport) {
 		"callbackURL": authconfig.soundcloud.callbackURL,
 		"passReqToCallback": true
 	}, function (req, accessToken, refreshToken, profile, done) {
+			console.log('profile 정보',profile);
 			function getConnection(callback) {
 				pool.getConnection(function (err, connection) {
 					if (err) {

@@ -22,6 +22,7 @@ router.post('/login', function (req, res, next) {
 					} else {
 						var result = {
 							"success": {
+								"id" : user.id,
 								"message": "로그인이 되었습니다"
 							}
 						};
@@ -62,6 +63,7 @@ router.get('/soundcloud/callback', function (req, res, next) {
 					} else {
 						var result = {
 							"success": {
+								"cloud_id" : user.cloudId,
 								"message": "연동로그인이 되었습니다."
 							}
 						};
