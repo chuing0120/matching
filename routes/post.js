@@ -18,27 +18,33 @@ router.post('/', function (req, res, next) {
       };
       var interest = [];  // + parseInt() !!!
       //객체로 넣으면 되겠군!!!
+//        interest.push({"genre":user.genre, "position":user.position});
+  //  console.log(interest);
+// 배열 2개 ... = gen[]  pos[]  ... 개수다를수도..
+    //원하는 결과물 = [0]={genre, pos} ...
       function parseGenrePosition(callback) {
-
+          var i=0;
           function each1(cb1) {
               async.eachSeries(user.genre, function (item, cb) {
-                  interest.push({"genre": parseInt(item)});
-
-                  console.log('intrest', interest);  //됨 끝......................
+                  interest.push([item]);
+                  //interest.push({"genre": item});
+                  cb();
               }, function (err) {
                   if (err) {
-                      console.log('에러1', err);//안됨??
                       callback(err);
                   }
-                  console.log('인터1', interest);//안나옴;;
+                  console.log('인터1', interest);//나옴;;
                   cb1();
               });
           };
 
           function each2(cb2) {
+              var i=0;
               async.eachSeries(user.position, function (item, cb) {
-                  interest.push({"position": parseInt(item)});
+                  interest[i++].push( item);
+                  //interest[i++].push({"position": item});
                   console.log('pitem', item);//됨 망
+                  cb();
               }, function (err) {
                   if (err) {
                       console.log('에러2', err);
@@ -115,7 +121,7 @@ router.post('/', function (req, res, next) {
                   connection.release();
                   callback(err);
               } else {
-// todo 어싱크 이치 여기다 돌려야할듯..   배열 왜돌렸지...........
+
                   function insertMatch( callback) {
                       var sql = "INSERT into matchdb.post (user_id, title, content, limit_people, decide_people) " +
                         "VALUES ( ?, ?, ?, ?, ?)";
@@ -131,25 +137,35 @@ router.post('/', function (req, res, next) {
                           }
                       });
                   }
+// todo 개수 다를때 라든지.. ㅜㅜ  언디파인(=공백=낫널..)이면 널로 넣어야할듯?
+                  function insertInterests(callback) {
 
-                  function insertInterest(callback) {
                       var sql = "insert into matchdb.interest (post_id, genre, position) " +
                         "    values ( ?, ?, ?)";
-
-                      connection.query(sql, [insertId, user.genre, user.position], function (err, results) {
+                      async.each(interest, function(item, callback) {
+                          connection.query(sql, [insertId, item[0], item[1]], function (err, results) {
+                              if (err) {
+                                  connection.rollback();
+                                  connection.release();
+                                  callback(err);    //가장 가까운 콜백잼?
+                              } else {    //어디서 봤던 코드..?
+                                  console.log('item complete',item);
+                                  callback(null);
+                              }
+                          });
+                      }, function (err) {
                           if (err) {
-                              connection.rollback();
-                              connection.release();
                               callback(err);
-                          } else {    //어디서 봤던 코드..?
+                          } else {
                               connection.commit();
                               connection.release();
                               callback(null);
                           }
                       });
+
                   }
 
-                  async.series([getConnection, insertMatch, insertInterest], function (err, results) {
+                  async.series([parseGenrePosition, getConnection, insertMatch, insertInterests], function (err, results) {
                       if (err) {
                           callback(err);
                       } else {

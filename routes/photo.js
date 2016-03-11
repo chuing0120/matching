@@ -75,7 +75,7 @@ router.post('/', isLoggedIn, function(req, res, next) {
         if (err) {
           callback(err);
         } else {
-          function updatePhoto(connection, callback) { //
+          function updatePhoto(connection, callback) { //todo 여러개url db업뎃 = 이치 = 트랜젝션?!
             var sql = "UPDATE matchdb.user " +
                       "SET photo_path= ? " +
                       "WHERE id = ?";
