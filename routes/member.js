@@ -163,6 +163,7 @@ router.get('/me', isLoggedIn, function (req, res, next) {
 						"data": result
 					}
 				};
+				Logger.log('debug',result,'sss');
 				res.json(data);
 			}
 		});
