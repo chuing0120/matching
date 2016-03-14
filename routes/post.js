@@ -29,7 +29,6 @@ router.post('/', function (req, res, next) {
                   if (err) {
                       callback(err);
                   }
-                  console.log('인터1', interest);//나옴;;
                   cb1();
               });
           };
@@ -38,15 +37,11 @@ router.post('/', function (req, res, next) {
               var i=0;
               async.eachSeries(user.position, function (item, cb) {
                   interest[i++].push( item);
-                  //interest[i++].push({"position": item});
-                  console.log('pitem', item);//됨 망
                   cb();
               }, function (err) {
                   if (err) {
-                      console.log('에러2', err);
                       callback(err);
                   }
-                  console.log('인터2', interest);
                   cb2();
               });
           }
@@ -113,7 +108,6 @@ router.post('/', function (req, res, next) {
       function insertPostInterest(connection, results, callback) {
           connection.beginTransaction(function (err) {  //오 롤백된듯? 엥 아닌가??
               if (err) {
-                  console.log("트렌젝션실패..");
                   connection.release();
                   callback(err);
               } else {
@@ -145,7 +139,6 @@ router.post('/', function (req, res, next) {
                                   connection.release();
                                   callback(err);    //가장 가까운 콜백잼?
                               } else {    //어디서 봤던 코드..?
-                                  console.log('item complete',item);
                                   callback(null);
                               }
                           });
@@ -469,17 +462,6 @@ router.get('/', function (req, res, next) {
         if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
             next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
         } else {    //동적 프로퍼티 생성?!?!
-            async.each(results, function iterator(result, callback) {
-                result.id += 10;
-                console.log(result);
-                callback(null);
-            }, function (err) {
-                if (err) {
-                    console.log('에러라니');
-                } else {
-                    console.log('던', results);
-                }
-            });
 
             var result = {
                 "success": {
