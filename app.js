@@ -7,8 +7,10 @@ var bodyParser = require('body-parser');
 var session = require('express-session');
 var passport = require('passport');
 
+global.Logger = require('./config/logging');
 global.pool = require('./config/dbpool');
 require('./config/passportconfig')(passport);
+
 
 var auth = require('./routes/auth');
 var member = require('./routes/member');
