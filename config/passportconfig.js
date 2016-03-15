@@ -41,7 +41,8 @@ module.exports = function (passport) {
 		usernameField: "username",
 		passwordField: "password",
 		passReqToCallback: true
-	}, function (req, username, password, done) { // new LocalStrategy를 local-login로 정책한다.
+	},
+		function (req, username, password, done) { // new LocalStrategy를 local-login로 정책한다.
 		function getConnection(callback) {
 			pool.getConnection(function (err, connection) {
 				if (err) {
@@ -105,7 +106,8 @@ module.exports = function (passport) {
 		"clientSecret": authconfig.soundcloud.appSecret,
 		"callbackURL": authconfig.soundcloud.callbackURL,
 		"passReqToCallback": true
-	}, function (req, accessToken, refreshToken, profile, done) {
+	},
+		function (req, accessToken, refreshToken, profile, done) {
 			console.log('profile 정보',profile);
 			function getConnection(callback) {
 				pool.getConnection(function (err, connection) {
@@ -126,9 +128,10 @@ module.exports = function (passport) {
 						callback(err);
 					} else {
 						if (results.length === 0) { //사용자가 존재 하지않을때 insert 기능일어남
-							var insert = "INSERT INTO matchdb.user (cloud_id, cloud_token, nickname) " +
-								"VALUES (?, ?, ?)";
-							connection.query(insert, [profile.id, accessToken, profile._json.username], function (err, result) {
+							var insert = "INSERT INTO matchdb.user (cloud_id, cloud_token, nickname, photo_path) " +
+														"VALUES (?, ?, ?, ?)";
+							connection.query(insert, [profile.id, accessToken, profile._json.username, profile._json.avatar_url], function (err, result) {
+																		//클라우드아이디,    토큰,          유저네임,                 썸네일사진
 								connection.release();
 								if (err) {
 									callback(err);
@@ -152,8 +155,8 @@ module.exports = function (passport) {
 								callback(null, user);
 							} else {
 								var update = "UPDATE matchdb.user " +
-									"SET cloud_token = ? " +
-									"WHERE cloud_id = ?";
+															"SET cloud_token = ? " +
+															"WHERE cloud_id = ?";
 								connection.query(update, [accessToken, profile.id], function (err, result) {
 									connection.release();
 									if (err) {
