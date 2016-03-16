@@ -211,7 +211,7 @@ router.get('/:mid', function (req, res, next) {
 				var data = {
 					"success": {
 						"message": "회원프로필 정보가 정상적으로 조회되었습니다",
-						"data": result
+						"data": result[0]
 					}
 				};
 				res.json(data);
