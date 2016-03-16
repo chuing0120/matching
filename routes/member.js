@@ -530,7 +530,7 @@ router.post('/me/photos', isLoggedIn, function (req, res, next) {
 								"Bucket": s3Config.bucket,
 								"Key": s3Config.imageDir + "/" + path.basename(results[0].photo_path)
 							};
-							s3.deleteObject(params, function (err, data) {
+							s3.deleteObject(params, function (err, data) { //s3올라간 파일 지움
 								if (err) {
 									connection.release();
 									callback(err);
@@ -558,7 +558,7 @@ router.post('/me/photos', isLoggedIn, function (req, res, next) {
 					})
 				}
 
-// 삭제후 업로드!!   선삭제 후업롣   왜냐면 삭제 에러시 못올리게하려고!!
+					// 삭제후 업로드!!   선삭제 이후 업로드   왜냐면 삭제 에러시 못올리게하려고!!
 				async.waterfall([UploadServer, getConnection, deleteS3Photo, updatePhoto], function (err, result) {
 					if (err) {
 						next(err);
