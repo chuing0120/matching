@@ -18,7 +18,7 @@ router.post('/login', function (req, res, next) {
 			} else {
 				req.logIn(user, function (err) {
 					if (err) {
-						console.log(err);
+						//console.log(err);
 						next(err);
 					} else {
 						var result = {
@@ -65,7 +65,7 @@ router.get('/soundcloud/callback', function (req, res, next) {
 			} else {
 				req.logIn(user, function (err) {
 					if (err) {
-						console.log(err);
+						//console.log(err);
 						next(err);
 					} else {
 						var result = {

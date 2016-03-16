@@ -491,14 +491,14 @@ router.post('/me/photos', isLoggedIn, function (req, res, next) {
 					var body = fs.createReadStream(files['photo'].path);
 					s3.upload({"Body": body}) //서버로 업로드
 						.on('httpUploadProgress', function (event) {
-							console.log('server event',event);
+						// event : loaded, part, key:jpg파일경로
 						})
 						.send(function (err, data) { // 파일 전송
 							if (err) {
 								callback(err);
 							} else {
 								fs.unlink(files['photo'].path, function () { // unlink(파일삭제) uploads에 기록이 안남음
-									console.log(files['photo'].path + " 파일이 삭제되었습니다...");
+									//uploads에 올라간 파일 삭데되었음..
 								});
 								results.push(data.Location); //data.Location에서 s3 올라간 파일경로 나옴
 								callback(null);
@@ -535,7 +535,6 @@ router.post('/me/photos', isLoggedIn, function (req, res, next) {
 									connection.release();
 									callback(err);
 								} else {
-									console.log('data 값뭐냥??',data)
 									callback(null, connection);
 								}
 							});
