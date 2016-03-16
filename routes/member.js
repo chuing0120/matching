@@ -235,114 +235,216 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 		var genre = req.body.genre;
 		var position = req.body.position;
 
-		function SelectUsername(connection, callback) {
-			var sql = "SELECT id " +
-				"FROM matchdb.user " +
-				"WHERE username = ?";
-			connection.query(sql, [username], function (err, results) {
-				if (err) {
-					connection.release();
-					callback(err);
-				} else {
-					if (results.length) {
-						if (req.user.id !== results[0].id) { // 기존 아이디 중복검사
-							var err = new Error();
-							err.message = '아이디가 이미 존재하고 있습니다.';
-							err.status = 409;
-							callback(err);
-						} else { //엘스로 안했더니 아래가 실행되면서 넘어가서 수정 진행됨 --;;  엘스 필수..........
-							callback(null, connection);  //  릴리즈???????
-						}
+		if (req.headers['content-type'] === 'application/x-www-form-urlencoded') {
+
+			function SelectUsername(connection, callback) {
+				var sql = "SELECT id " +
+					"FROM matchdb.user " +
+					"WHERE username = ?";
+				connection.query(sql, [username], function (err, results) {
+					if (err) {
+						connection.release();
+						callback(err);
 					} else {
-						callback(null, connection);
-					}
-				}
-			});
-		}
-
-		function SelectNickname(connection, callback) {
-			var sql = "SELECT id " +
-									"FROM matchdb.user " +
-									"WHERE nickname = ?";
-			connection.query(sql, [nickname], function (err, results) {
-				if (err) {
-					connection.release();
-					callback(err);
-				} else {
-					if (results.length) {
-						if (req.user.id !== results[0].id) { // 기존 닉네임 중복검사
-							var err = new Error();
-							err.message = '닉네임이 이미 존재하고 있습니다.';
-							err.status = 409;
-							callback(err);
-						} else { //엘스로 안했더니 아래가 실행되면서 넘어가서 수정 진행됨 --;;  엘스 필수..........
-							callback(null, connection);  //  릴리즈???????
+						if (results.length) {
+							if (req.user.id !== results[0].id) { // 기존 아이디 중복검사
+								var err = new Error();
+								err.message = '아이디가 이미 존재하고 있습니다.';
+								err.status = 409;
+								callback(err);
+							} else { //엘스로 안했더니 아래가 실행되면서 넘어가서 수정 진행됨 --;;  엘스 필수..........
+								callback(null, connection);  //  릴리즈???????
+							}
+						} else {
+							callback(null, connection);
 						}
-					} else {
-						callback(null, connection);
 					}
-				}
-			});
-		}
+				});
+			}
 
-		function generateSalt(connection, callback) { // salt
-			var rounds = 10;
-			bcrypt.genSalt(rounds, function (err, salt) {
-				if (err) {
-					callback(err);
-				} else {
-					callback(null, salt, connection);
-				}
-			});
-		}
+			function SelectNickname(connection, callback) {
+				var sql = "SELECT id " +
+					"FROM matchdb.user " +
+					"WHERE nickname = ?";
+				connection.query(sql, [nickname], function (err, results) {
+					if (err) {
+						connection.release();
+						callback(err);
+					} else {
+						if (results.length) {
+							if (req.user.id !== results[0].id) { // 기존 닉네임 중복검사
+								var err = new Error();
+								err.message = '닉네임이 이미 존재하고 있습니다.';
+								err.status = 409;
+								callback(err);
+							} else { //엘스로 안했더니 아래가 실행되면서 넘어가서 수정 진행됨 --;;  엘스 필수..........
+								callback(null, connection);  //  릴리즈???????
+							}
+						} else {
+							callback(null, connection);
+						}
+					}
+				});
+			}
 
-		function generateHashPassword(salt, connection, callback) { // 해쉬 암호화
-			bcrypt.hash(password, salt, function (err, hashPassword) {
-				if (err) {
-					callback(err);
-				} else {
-					callback(null, hashPassword, connection);
-				}
-			});
-		}
-
-		function UpdateMember(hashPassword, connection, callback) { // Update문
-			var sql = "UPDATE user " +
-									"SET username=?, password=? , nickname=?, intro=?, genre=?, position=? " +
-									"WHERE id = ?";
-
-			//username = (username === null) ? results[0].username : username;
-			//password = (password === null) ? results[0].password : password;
-			//nickname = (nickname === null) ? results[0].nickname : nickname;
-			//intro = (intro === null) ? results[0].intro : intro;
-			//genre = (genre === null) ? results[0].genre : genre;
-			//position = (position === null) ? results[0].position : position;
-
-			connection.query(sql, [username, hashPassword, nickname, intro, genre, position, userId],
-				function (err, results) {
-					connection.release();
+			function generateSalt(connection, callback) { // salt
+				var rounds = 10;
+				bcrypt.genSalt(rounds, function (err, salt) {
 					if (err) {
 						callback(err);
 					} else {
-						callback(null);
+						callback(null, salt, connection);
 					}
 				});
-		}
-
-		async.waterfall([getConnection, SelectUsername, SelectNickname, generateSalt,
-			generateHashPassword, UpdateMember], function (err, result) {
-			if (err) {
-				next(err);
-			} else {
-				var data = {
-					"success": {
-						"message": "회원 프로필 수정이 정상적으로 처리되었습니다.",
-						"data": result
-					}
-				};
-				res.json(data);
 			}
-		});
+
+			function generateHashPassword(salt, connection, callback) { // 해쉬 암호화
+				bcrypt.hash(password, salt, function (err, hashPassword) {
+					if (err) {
+						callback(err);
+					} else {
+						callback(null, hashPassword, connection);
+					}
+				});
+			}
+
+			function UpdateMember(hashPassword, connection, callback) { // Update문
+				var sql = "UPDATE user " +
+					"SET username=?, password=? , nickname=?, intro=?, genre=?, position=? " +
+					"WHERE id = ?";
+
+				connection.query(sql, [username, hashPassword, nickname, intro, genre, position, userId],
+					function (err, results) {
+						connection.release();
+						if (err) {
+							callback(err);
+						} else {
+							callback(null);
+						}
+					});
+			}
+
+			async.waterfall([getConnection, SelectUsername, SelectNickname, generateSalt,
+				generateHashPassword, UpdateMember], function (err, result) {
+				if (err) {
+					next(err);
+				} else {
+					var data = {
+						"success": {
+							"message": "회원 프로필 수정이 정상적으로 처리되었습니다.",
+							"data": result
+						}
+					};
+					res.json(data);
+				}
+			});
+		} else {
+			var form = new formidable.IncomingForm(); // 파일 업로드 (formidable)
+			form.uploadDir = path.join(__dirname, '../uploads'); //uploads 폴더경로로
+			form.keepExtensions = true; // 파일 확장자 남긴다에 true
+			form.maxFieldsSize = 5 * 1024 * 1024; // 5MB 용량 제한 , 아무리 사진 하나가 5MB을 넘을리가..
+
+			form.parse(req, function (err, fields, files) { // 폼을 파싱하는거같은데 보류
+				var results = [];
+
+				var mimeType = mime.lookup(path.basename(files['photo'].path)); //mime타입 대상은 photo네임
+				var s3 = new AWS.S3({ //s3 config정보 로딩
+					"accessKeyId": s3Config.key,
+					"secretAccessKey": s3Config.secret,
+					"region": s3Config.region,
+					"params": {
+						"Bucket": s3Config.bucket,
+						"Key": s3Config.imageDir + "/" + path.basename(files['photo'].path), // 목적지의 이름
+						"ACL": s3Config.imageACL,
+						"ContentType": mimeType //mime.lookup
+					}
+				});
+
+				function UploadServer(callback) { // s3로 파일 업로드
+					var body = fs.createReadStream(files['photo'].path);
+					s3.upload({"Body": body}) //서버로 업로드
+						.on('httpUploadProgress', function (event) {
+							// event : loaded, part, key:jpg파일경로
+						})
+						.send(function (err, data) { // 파일 전송
+							if (err) {
+								callback(err);
+							} else {
+								fs.unlink(files['photo'].path, function () { // unlink(파일삭제) uploads에 기록이 안남음
+									//uploads에 올라간 파일 삭데되었음..
+								});
+								results.push(data.Location); //data.Location에서 s3 올라간 파일경로 나옴
+								callback(null);
+							}
+						});
+				}
+
+				function deleteS3Photo(connection, callback) { // s3에 있는 파일 지워보장
+					var userId = req.user.id;
+
+					var sql = "SELECT photo_path " +
+						"FROM matchdb.user " +
+						"WHERE id = ?";
+					connection.query(sql, [userId], function (err, results) {
+						if (err) {
+							connection.release();
+							callback(err);
+						} else if (results.length === 0) {
+							// 파일 존재 하지 않을때
+							callback(null, connection);
+						} else {
+							//path.basename(results[0].photo_path : upload_xxx.png 파일나옴
+							var s3 = new AWS.S3({
+								"accessKeyId": s3Config.key,
+								"secretAccessKey": s3Config.secret,
+								"region": s3Config.region
+							});
+							var params = {
+								"Bucket": s3Config.bucket,
+								"Key": s3Config.imageDir + "/" + path.basename(results[0].photo_path)
+							};
+							s3.deleteObject(params, function (err, data) { //s3올라간 파일 지움
+								if (err) {
+									connection.release();
+									callback(err);
+								} else {
+									callback(null, connection);
+								}
+							});
+						}
+					})
+				}
+
+				function updatePhoto(connection, callback) { //db에 있는 기존데이터를 s3통한 링크로 업데이트
+					var sql = "UPDATE matchdb.user " +
+						"SET photo_path= ? " +
+						"WHERE id = ?";
+					connection.query(sql, [results[0], userId], function (err, result) {
+						// 현재 results[0] 값은 : s3에 올라간 파일경로나옴 data.Location값하고 일치
+						connection.release();
+						if (err) {
+							callback(err);
+						} else {
+							callback(null, {"id": result.id});
+						}
+					})
+				}
+
+				// 삭제후 업로드!!   선삭제 이후 업로드   왜냐면 삭제 에러시 못올리게하려고!!
+				async.waterfall([UploadServer, getConnection, deleteS3Photo, updatePhoto], function (err, result) {
+					if (err) {
+						next(err);
+					} else {
+						var data = {
+							"success": {
+								"message": "프로필 사진이 업로드 되었습니다."
+							}
+						};
+						res.json(data);
+					}
+				});
+			});
+		}
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
