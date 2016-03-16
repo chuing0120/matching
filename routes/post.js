@@ -9,6 +9,17 @@ var fs = require('fs');
 
 var router = express.Router();
 
+function isLoggedIn(req, res, next) {
+  if (!req.isAuthenticated()) {
+    var err = new Error();
+    err.message = "로그인이 필요합니다.";
+    err.status = 401;
+    next(err);
+  } else {
+    next();
+  }
+}
+
 // 6. 매칭/스토리 쓰기 (HTTP)     파일 업로드............?? + 구인;;;;;;;;;;
 router.post('/', function (req, res, next) {
   if (req.secure) {
@@ -1181,7 +1192,7 @@ router.delete('/:pid', function (req, res, next) {
 // 9. 매칭/스토리 상세보기  =  삭제
 
 
-// 10. 매칭/스토리 목록 보기  + 상세   //검색기능 ㅜㅜㅜㅜㅜㅜ
+// 10. 매칭/스토리 목록 보기  + 상세   // 로그인 확인 추가 예정
 router.get('/', function (req, res, next) {
 
   //검색기능 ㅜㅜ
@@ -1206,9 +1217,9 @@ router.get('/', function (req, res, next) {
 
     if (keyword !== undefined) {
       switch (flag) {
-        case 'nick':    //닉/제목/내용/제목+내용
-          sql = "SELECT p.id, title, content, nickname " +
-            ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'post_date' " +
+        case 'nick':    //닉//내용/
+          sql = "SELECT p.id,  content, nickname " +
+            ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
             ", limit_people, decide_people, path as photo " +
             "FROM matchdb.post p join matchdb.user u on(u.id = p.user_id) " +
             "                     join matchdb.file f on(p.id = f.post_id)" +
@@ -1217,20 +1228,20 @@ router.get('/', function (req, res, next) {
             "LIMIT ? OFFSET ? ";// +
           break;
 
-        case 'title':
-          sql = "SELECT p.id, title, content, nickname " +
-            ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'post_date' " +
-            ", limit_people, decide_people, path as photo " +
-            "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-            "                     join matchdb.file f on(p.id = f.post_id)" +
-            "WHERE title like ? " +
-            connection.escape(keyword) + " " +
-            "LIMIT ? OFFSET ? ";// +
-          break;
+        //case 'title':
+        //  sql = "SELECT p.id, title, content, nickname " +
+        //    ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
+        //    ", limit_people, decide_people, path as photo " +
+        //    "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
+        //    "                     join matchdb.file f on(p.id = f.post_id)" +
+        //    "WHERE title like ? " +
+        //    connection.escape(keyword) + " " +
+        //    "LIMIT ? OFFSET ? ";// +
+        //  break;
 
         case 'content':
-          sql = "SELECT p.id, title, content, nickname " +
-            ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'post_date' " +
+          sql = "SELECT p.id, content, nickname " +
+            ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
             ", limit_people, decide_people, path as photo " +
             "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
             "                     join matchdb.file f on(p.id = f.post_id)" +
@@ -1242,8 +1253,8 @@ router.get('/', function (req, res, next) {
           break;
       }
     } else {
-      sql = "SELECT p.id, title, content, nickname " +
-        ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'post_date' " +
+      sql = "SELECT p.id, content, nickname " +
+        ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
         ", limit_people, decide_people, path as photo " +
         "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
         "join matchdb.file f on(p.id = f.post_id)" +
@@ -1251,9 +1262,9 @@ router.get('/', function (req, res, next) {
     }
 
     if (flag === 'people') {
-      sql = "SELECT p.id, title, content, nickname " +
-        ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'post_date' " +
-        ", limit_people, decide_people, path as photo " +
+      sql = "SELECT p.id, content, nickname " +
+        ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
+        ", limit_people, decide_people, path as 'photo' " +
         "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
         "                     join matchdb.file f on(p.id = f.post_id)" +
         "WHERE limit_people IS NOT NULL " +
@@ -1268,6 +1279,11 @@ router.get('/', function (req, res, next) {
         callback(null, results);
       }
     });
+  }
+
+  // selectFiles ㄱㄱ
+  function selectFile(connection, results, callback) {
+
   }
 
   async.waterfall([getConnecton, selectPost], function (err, results) {
