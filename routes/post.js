@@ -90,12 +90,13 @@ router.post('/', function (req, res, next) {
         "genre": req.body.genre,  // 장르 받아옴
         "position": req.body.position, // 포지션받아옴
       };
-      //if (user.genre instanceof String) { //왜안돼 ㅜㅜ
+
+      if (typeof user.genre === 'string') {
         user.genre = user.genre.split(',');
-      //}
-      //if (user.genre instanceof String) {
+      }
+      if (typeof user.position === 'string') {
         user.position = user.position.split(',');
-      //}
+      }
 
       function parseGenrePosition(callback) {
         var i = 0;
@@ -1220,9 +1221,9 @@ router.get('/', function (req, res, next) {
         case 'nick':    //닉//내용/
           sql = "SELECT p.id,  content, nickname " +
             ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-            ", limit_people, decide_people, path as photo " +
+            ", limit_people, decide_people " +
             "FROM matchdb.post p join matchdb.user u on(u.id = p.user_id) " +
-            "                     join matchdb.file f on(p.id = f.post_id)" +
+//            "                     join matchdb.file f on(p.id = f.post_id)" +
             "WHERE nickname like " +
             connection.escape('%' + keyword + '%') + " " +
             "LIMIT ? OFFSET ? ";// +
@@ -1242,9 +1243,9 @@ router.get('/', function (req, res, next) {
         case 'content':
           sql = "SELECT p.id, content, nickname " +
             ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-            ", limit_people, decide_people, path as photo " +
+            ", limit_people, decide_people " +
             "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-            "                     join matchdb.file f on(p.id = f.post_id)" +
+//            "                     join matchdb.file f on(p.id = f.post_id)" +
             "WHERE content like " +
             connection.escape('%' + keyword + '%') + " " +
             "LIMIT ? OFFSET ? ";// +
@@ -1255,18 +1256,18 @@ router.get('/', function (req, res, next) {
     } else {
       sql = "SELECT p.id, content, nickname " +
         ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-        ", limit_people, decide_people, path as photo " +
+        ", limit_people, decide_people " +
         "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-        "join matchdb.file f on(p.id = f.post_id)" +
+//        "join matchdb.file f on(p.id = f.post_id)" +
         "LIMIT ? OFFSET ? ";// +
     }
 
     if (flag === 'people') {
       sql = "SELECT p.id, content, nickname " +
         ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-        ", limit_people, decide_people, path as 'photo' " +
+        ", limit_people, decide_people " +
         "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-        "                     join matchdb.file f on(p.id = f.post_id)" +
+//        "                     join matchdb.file f on(p.id = f.post_id)" +
         "WHERE limit_people IS NOT NULL " +
         "LIMIT ? OFFSET ?";
     }
@@ -1276,22 +1277,47 @@ router.get('/', function (req, res, next) {
       if (err) {
         callback(err);
       } else {    //어디서 봤던 코드..?
-        callback(null, results);
+        callback(null, connection, results);
       }
     });
   }
 
   // selectFiles ㄱㄱ
+//  var photos = [];
   function selectFile(connection, results, callback) {
+    var sql = "SELECT path " +
+              "FROM matchdb.file " +
+              "WHERE post_id = ? ";
+    var i=0;
+    async.each(results, function (item, cb) {
+      connection.query(sql, [item.id], function(err, result){
+        if (err) {
+          cb(err);
+        } else {
+          item.photo = [];
+          item.photo.push(result);
+          console.log('리절트',result);
+          cb(null);
+        }
+      });
+    }, function (err) {
+      if (err) {
+        connection.release();
+        callback(err);
+      } else {
+        callback(null, results);
+      }
+    });
+
 
   }
 
-  async.waterfall([getConnecton, selectPost], function (err, results) {
+  async.waterfall([getConnecton, selectPost, selectFile], function (err, results) {
     if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
 
       next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
     } else {    //동적 프로퍼티 생성?!?!
-
+//      results.photo = photos;
       var result = {
         "success": {
           "message": "게시글이 목록조회되었습니다.",
