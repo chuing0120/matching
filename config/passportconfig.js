@@ -108,7 +108,6 @@ module.exports = function (passport) {
 		"passReqToCallback": true
 	},
 		function (req, accessToken, refreshToken, profile, done) {
-			console.log('profile 정보',profile);
 			function getConnection(callback) {
 				pool.getConnection(function (err, connection) {
 					if (err) {
