@@ -240,7 +240,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
             var result = {
               "success": {
                 "message": "body로 게시글이 작성되었습니다.",
-                "userInput": user
+                //"userInput": user
               }
             };
             res.json(result);        //더미!!!!응답!!!!!!
@@ -254,7 +254,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
             var result = {
               "success": {
                 "message": "body로 매칭게시글이 작성되었습니다.",
-                "userInput": user
+                //"userInput": user
               }
             };
             res.json(result);        //더미!!!!응답!!!!!!
@@ -381,11 +381,12 @@ router.post('/', isLoggedIn, function (req, res, next) {
               })
               .send(function (err, data) {
                 if (err) {
-                  console.log(err);
+                  var err = new Error();
+                  err.message = "업로드s에 실패하셨습니다."
                   cb(err);
                 } else {
                   fs.unlink(file.path, function () {
-                    console.log(file.path + " 파일이 삭제되었습니다...");
+                    //console.log(file.path + " 파일이 삭제되었습니다...");
                   });
                   results.push({"s3URL": data.Location}); // 링크데이터
                   cb();
@@ -611,8 +612,12 @@ router.post('/', isLoggedIn, function (req, res, next) {
                     };
                     next(err);
                   } else {
-                    //results.message = "파일 업로드 완료";
-                    res.json("테스트 : 파일 업로드s 게시 완료");
+                    var result = {
+                      "success": {
+                        "message": "파일 업로드s 게시 완료"
+                      }
+                    }
+                    res.json(result);
                   }
                 });
               } else {
@@ -621,8 +626,12 @@ router.post('/', isLoggedIn, function (req, res, next) {
                     deleteS3Links();
                     next(err);
                   } else {
-                    //results.message = "파일 업로드 완료";
-                    res.json("테스트 : 파일 업로드s 매칭 완료");
+                    var result = {
+                      "success": {
+                        "message": "파일 업로드s 매칭 완료"
+                      }
+                    }
+                    res.json(result);
                   }
                 });
               }
@@ -731,7 +740,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                 var result = {
                   "success": {
                     "message": "body로 게시글이 작성되었습니다.",
-                    "userInput": user
+                    //"userInput": user
                   }
                 };
                 res.json(result);        //더미!!!!응답!!!!!!
@@ -745,7 +754,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                 var result = {
                   "success": {
                     "message": "body로 매칭게시글이 작성되었습니다.",
-                    "userInput": user
+                    //"userInput": user
                   }
                 };
                 res.json(result);        //더미!!!!응답!!!!!!
@@ -989,9 +998,12 @@ router.post('/', isLoggedIn, function (req, res, next) {
                 };
                 next(err);
               } else {
-                //results.message = "파일 업로드 완료";
-                res.json("테스트 : 파일 업로드 게시 완료");
-                //롤백당함잼...
+                var result = {
+                  "success": {
+                    "message": "파일 업로드 게시 완료"
+                  }
+                }
+                res.json(result);
               }
             });
           } else {
@@ -1000,8 +1012,12 @@ router.post('/', isLoggedIn, function (req, res, next) {
                 deleteS3Link();
                 next(err);
               } else {
-                //results.message = "파일 업로드 완료";
-                res.json("테스트 : 파일 업로드 매칭 완료");
+                var result = {
+                  "success": {
+                    "message": "파일 업로드 매칭 완료"
+                  }
+                }
+                res.json(result);
               }
             });
           }
@@ -1185,7 +1201,7 @@ router.delete('/:pid', isLoggedIn, function (req, res, next) {
 
 
 // 10. 매칭/스토리 목록 보기  + 상세   // 로그인 확인 추가 예정
-router.get('/', function (req, res, next) {
+router.get('/', isLoggedIn, function (req, res, next) {
 
   //검색기능 ㅜㅜ
   var keyword = req.query.key;
@@ -1202,17 +1218,18 @@ router.get('/', function (req, res, next) {
 
   function selectPost(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
     // 페이지 안들어왔을때 처리 안한듯..ㅜ
-    var pageNum = req.query.page;
-    var limit = 3;
+    var pageNum = req.query.page ;
+    //if (pageNum)
+    var limit = 10;
     var offset = limit * (pageNum - 1);
     var sql;
 
     if (keyword !== undefined) {
       switch (flag) {
         case 'nick':    //닉//내용/
-          sql = "SELECT p.id,  content, nickname " +
+          sql = "SELECT p.id as 'pid',  content, nickname " +
             ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-            ", limit_people, decide_people " +
+            ", limit_people, decide_people, u.id as 'mid' " +
             "FROM matchdb.post p join matchdb.user u on(u.id = p.user_id) " +
 //            "                     join matchdb.file f on(p.id = f.post_id)" +
             "WHERE nickname like " +
@@ -1232,9 +1249,9 @@ router.get('/', function (req, res, next) {
         //  break;
 
         case 'content':
-          sql = "SELECT p.id, content, nickname " +
+          sql = "SELECT p.id as 'pid', content, nickname " +
             ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-            ", limit_people, decide_people " +
+            ", limit_people, decide_people, u.id as 'mid' " +
             "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
 //            "                     join matchdb.file f on(p.id = f.post_id)" +
             "WHERE content like " +
@@ -1245,18 +1262,18 @@ router.get('/', function (req, res, next) {
           break;
       }
     } else {
-      sql = "SELECT p.id, content, nickname " +
+      sql = "SELECT p.id as 'pid', content, nickname " +
         ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-        ", limit_people, decide_people " +
+        ", limit_people, decide_people, u.id as 'mid' " +
         "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
 //        "join matchdb.file f on(p.id = f.post_id)" +
         "LIMIT ? OFFSET ? ";// +
     }
 
     if (flag === 'people') {
-      sql = "SELECT p.id, content, nickname " +
+      sql = "SELECT p.id as 'pid', content, nickname " +
         ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-        ", limit_people, decide_people " +
+        ", limit_people, decide_people, u.id as 'mid' " +
         "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
 //        "                     join matchdb.file f on(p.id = f.post_id)" +
         "WHERE limit_people IS NOT NULL " +
@@ -1281,7 +1298,7 @@ router.get('/', function (req, res, next) {
               "WHERE post_id = ? ";
     var i=0;
     async.each(results, function (item, cb) {
-      connection.query(sql, [item.id], function(err, result){
+      connection.query(sql, [item.pid], function(err, result){
         if (err) {
           cb(err);
         } else {
