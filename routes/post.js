@@ -1203,9 +1203,10 @@ router.delete('/:pid', isLoggedIn, function (req, res, next) {
 // 10. 매칭/스토리 목록 보기  + 상세   // 로그인 확인 추가 예정
 router.get('/', isLoggedIn, function (req, res, next) {
 
-  //검색기능 ㅜㅜ
-  var keyword = req.query.key;
-  var flag = req.query.flag;  //  닉/제목/내용/제목+내용 flag!!!
+  //검색기능 ㅜㅜ   // null 처리
+  var keyword = (req.query.key === null) ? undefined : req.query.key;
+  var flag = (req.query.flag === null) ? undefined : req.query.flag;  //  닉/내용 flag!!!
+
   function getConnecton(callback) {
     pool.getConnection(function (err, connection) {
       if (err) {
