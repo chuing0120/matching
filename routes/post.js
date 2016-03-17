@@ -23,79 +23,283 @@ function isLoggedIn(req, res, next) {
 // 6. 매칭/스토리 쓰기 (HTTP)     파일 업로드............?? + 구인;;;;;;;;;;
 router.post('/', isLoggedIn, function (req, res, next) {
 
-    function getConnection(callback) {
-      pool.getConnection(function (err, conn) {
+  function getConnection(callback) {
+    pool.getConnection(function (err, conn) {
+      if (err) {
+        callback(err);
+      } else {
+        callback(null, conn);//..........
+      }
+    });
+  }
+
+  function insertNewLinks(connection, callback) {
+    var insertResults = [];//new link id
+    var sql = "INSERT INTO matchdb.file (post_id, path) " +
+      "VALUES ( 1 , ? )"; //todo go to post... cuz post_id
+    async.each(results, function (item, callback) {
+
+      connection.query(sql, [item.s3URL], function (err, result) {
+        if (err) {
+          var s3 = new AWS.S3({
+            "accessKeyId": s3Config.key,
+            "secretAccessKey": s3Config.secret,
+            "region": s3Config.region
+          });
+          var params = {
+            "Bucket": s3Config.bucket,       // 목적지의 이름
+            "Key": s3Config.imageDir + "/" + path.basename(item.s3URL)
+          };
+
+          s3.deleteObject(params, function (err, data) {
+            if (err) {
+              console.log(err, err.stack);//실패시 로깅...
+            }
+          });
+          callback(err);
+        } else {
+          insertResults.push(result.insertId);  //+callback(null will be need)
+          // need insert id cuz select old data except new link!!
+          callback(null);  //엥 왜됐었지??
+        }
+      });
+    }, function (err) {
+      if (err) {
+        connection.release();
+        callback(err);
+      } else {
+        callback(null, connection, insertResults);
+      }
+    });
+
+  }
+
+  var insertId;
+  var interest = [];  // + parseInt() !!!
+  var userId = req.user.id;
+  if (req.headers['content-type'] === 'application/x-www-form-urlencoded') { // 파일없이 저장할 때
+    var user = {
+      "id": userId,
+      "title": req.body.title,
+      "content": req.body.content,
+      "limit": req.body.limit,  //  언디파인이면 게시글
+      "decide": req.body.decide, //  값 존재 = 매칭!!
+      "genre": req.body.genre,  // 장르 받아옴
+      "position": req.body.position, // 포지션받아옴
+    };
+
+    if (typeof user.genre === 'string') {
+      user.genre = user.genre.split(',');
+    }
+    if (typeof user.position === 'string') {
+      user.position = user.position.split(',');
+    }
+
+    function parseGenrePosition(callback) {
+      var i = 0;
+
+      function each1(cb1) {
+        async.eachSeries(user.genre, function (item, cb) {
+          interest.push([item]);
+          //interest.push({"genre": item});
+          cb();
+        }, function (err) {
+          if (err) {
+            callback(err);
+          }
+          console.log('인터11',interest);
+          cb1();
+        });
+      };
+
+      function each2(cb2) {
+        var i = 0;
+        async.eachSeries(user.position, function (item, cb) {
+          interest[i++].push(item);
+          cb();
+        }, function (err) {
+          if (err) {
+            callback(err);
+          }
+          cb2();
+        });
+      }
+
+      async.series([each1, each2], function (err, results) {
         if (err) {
           callback(err);
         } else {
-          callback(null, conn);//..........
+
+          callback(null);
+        }
+      });
+
+    }
+
+    function selectMember(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+      var sql = "SELECT nickname, genre, position, photo_path " +
+        "FROM matchdb.user " +
+        "WHERE id = ?";
+      connection.query(sql, [user.id], function (err, results) {
+        if (err) {
+          connection.release();
+          callback(err);
+        } else {    //어디서 봤던 코드..?
+          callback(null, connection, results);
         }
       });
     }
 
-    function insertNewLinks(connection, callback) {
-      var insertResults = [];//new link id
-      var sql = "INSERT INTO matchdb.file (post_id, path) " +
-        "VALUES ( 1 , ? )"; //todo go to post... cuz post_id
-      async.each(results, function (item, callback) {
+    function insertPost(connection, results, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+      var sql = "insert into matchdb.post (user_id, title, content) " +
+        "    values ( ?, ?, ?)";        //1=user.id
+      connection.query(sql, [user.id, user.title, user.content], function (err, results) {
+        connection.release();
+        if (err) {
+          callback(err);
+        } else {    //어디서 봤던 코드..?
+          callback(null);
+        }
+      });
+    }
 
-        connection.query(sql, [item.s3URL], function (err, result) {
-          if (err) {
-            var s3 = new AWS.S3({
-              "accessKeyId": s3Config.key,
-              "secretAccessKey": s3Config.secret,
-              "region": s3Config.region
-            });
-            var params = {
-              "Bucket": s3Config.bucket,       // 목적지의 이름
-              "Key": s3Config.imageDir + "/" + path.basename(item.s3URL)
-            };
-
-            s3.deleteObject(params, function (err, data) {
-              if (err) {
-                console.log(err, err.stack);//실패시 로깅...
-              }
-            });
-            callback(err);
-          } else {
-            insertResults.push(result.insertId);  //+callback(null will be need)
-            // need insert id cuz select old data except new link!!
-            callback(null);  //엥 왜됐었지??
-          }
-        });
-      }, function (err) {
+    function insertPostInterest(connection, results, callback) {
+      connection.beginTransaction(function (err) {  //오 롤백된듯? 엥 아닌가??
         if (err) {
           connection.release();
           callback(err);
         } else {
-          callback(null, connection, insertResults);
-        }
-      });
 
+          function insertMatch(callback) {
+            var sql = "INSERT into matchdb.post (user_id, title, content, limit_people, decide_people) " +
+              "VALUES ( ?, ?, ?, ?, ?)";
+            connection.query(sql, [user.id, user.title, user.content,
+              user.limit, user.decide], function (err, result) {
+              if (err) {
+                connection.rollback();
+                connection.release();
+                callback(err);
+              } else {    //어디서 봤던 코드..?
+                insertId = result.insertId;
+                callback(null);//, connection);
+              }
+            });
+          }
+
+// todo 개수 다를때 라든지.. ㅜㅜ  언디파인(=공백=낫널..)이면 널로 넣어야할듯?
+          function insertInterests(callback) {
+// sql: 'insert into matchdb.interest (post_id, genre, position)     values ( 79, \'0\'  ~ 1 2 , NULL)' }
+            //왜 널이여..
+            var sql = "insert into matchdb.interest (post_id, genre, position) " +
+              "    values ( ?, ?, ?)";
+            async.each(interest, function (item, callback) {
+              connection.query(sql, [insertId, item[0], item[1]], function (err, results) {
+                if (err) {
+                  callback(err);    //가장 가까운 콜백잼?
+                } else {    //어디서 봤던 코드..?
+                  callback(null);
+                }
+              });
+            }, function (err) {
+              if (err) {
+                connection.rollback();
+                connection.release();
+                callback(err);
+              } else {
+                connection.commit();
+                connection.release();
+                callback(null);
+              }
+            });
+
+          }
+
+          async.series([parseGenrePosition, getConnection, insertMatch, insertInterests], function (err, results) {
+            if (err) {
+              callback(err);
+            } else {
+              callback(null);
+            }
+          });
+
+
+        }
+      })
     }
 
-    var insertId;
-    var interest = [];  // + parseInt() !!!
-    var userId = req.user.id;
-    if (req.headers['content-type'] === 'application/x-www-form-urlencoded') { // 파일없이 저장할 때
-      var user = {
-        "id": userId,
-        "title": req.body.title,
-        "content": req.body.content,
-        "limit": req.body.limit,  //  언디파인이면 게시글
-        "decide": req.body.decide, //  값 존재 = 매칭!!
-        "genre": req.body.genre,  // 장르 받아옴
-        "position": req.body.position, // 포지션받아옴
-      };
+    //1개만 왔을경우? 리밋=3 디사=언디 = 0으로..   리밋?? 디사 3 ==??? 매칭?
+    // 리밋이 1보다 작은경우...=매칭..?
+    // 숫자가 아닐경우........ NaN!!!??
+    // 리밋보다 디사가 클경우...........
 
-      if (typeof user.genre === 'string') {
-        user.genre = user.genre.split(',');
-      }
-      if (typeof user.position === 'string') {
-        user.position = user.position.split(',');
+    if (user.limit === undefined) { //됨
+      async.waterfall([getConnection, selectMember, insertPost], function (err, result) {
+        if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+          next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
+        } else {    //동적 프로퍼티 생성?!?!
+          var result = {
+            "success": {
+              "message": "body로 게시글이 작성되었습니다.",
+              //"userInput": user
+            }
+          };
+          res.json(result);        //더미!!!!응답!!!!!!
+        }
+      });
+    } else {
+      async.waterfall([getConnection, selectMember, insertPostInterest], function (err, result) {
+        if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+          next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
+        } else {    //동적 프로퍼티 생성?!?!
+          var result = {
+            "success": {
+              "message": "body로 매칭게시글이 작성되었습니다.",
+              //"userInput": user
+            }
+          };
+          res.json(result);        //더미!!!!응답!!!!!!
+        }
+      });
+    }
+
+
+  } else { // 파일을 포함한  때 ('multipart/form-data; boundary=----...')
+    var form = new formidable.IncomingForm();
+    form.uploadDir = path.join(__dirname, '../uploads');
+    form.keepExtensions = true;
+    form.multiples = true;
+    form.maxFieldsSize = 10 * 1024 * 1024;      // 10MB !!
+    form.parse(req, function (err, fields, files) {
+      var results = [];
+
+      function deleteS3Links() {
+        async.each(results, function (item, cb) {
+          var s3 = new AWS.S3({
+            "accessKeyId": s3Config.key,
+            "secretAccessKey": s3Config.secret,
+            "region": s3Config.region
+          });
+          var params = {
+            "Bucket": s3Config.bucket,       // 목적지의 이름
+            "Key": s3Config.imageDir + "/" + path.basename(item.s3URL)
+          };
+
+          s3.deleteObject(params, function (err, data) {
+            if (err) {
+              console.log(err, err.stack);//실패시 로깅...
+            }
+          });
+        }, function (err) {
+          if (err) {
+            callback(err);//로깅? ㅜㅜ
+          } else {
+            callback(err);
+          }
+        });
       }
 
       function parseGenrePosition(callback) {
+
         var i = 0;
 
         function each1(cb1) {
@@ -105,9 +309,10 @@ router.post('/', isLoggedIn, function (req, res, next) {
             cb();
           }, function (err) {
             if (err) {
+
               callback(err);
             }
-            console.log('인터11',interest);
+            console.log('인터1',interest);
             cb1();
           });
         };
@@ -116,11 +321,13 @@ router.post('/', isLoggedIn, function (req, res, next) {
           var i = 0;
           async.eachSeries(user.position, function (item, cb) {
             interest[i++].push(item);
+            console.log('인터2',interest);
             cb();
           }, function (err) {
             if (err) {
               callback(err);
             }
+            console.log('인터22',interest);
             cb2();
           });
         }
@@ -136,697 +343,115 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
       }
 
-      function selectMember(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-        var sql = "SELECT nickname, genre, position, photo_path " +
-          "FROM matchdb.user " +
-          "WHERE id = ?";
-        connection.query(sql, [user.id], function (err, results) {
-          if (err) {
-            connection.release();
-            callback(err);
-          } else {    //어디서 봤던 코드..?
-            callback(null, connection, results);
-          }
-        });
+      var user = {
+        "id": userId,
+        "title": fields.title,
+        "content": fields.content,
+        "limit": fields.limit,  //  언디파인이면 게시글
+        "decide": fields.decide, //  값 존재 = 매칭!!
+        "genre": fields.genre,  // 장르 받아옴
+        "position": fields.position // 포지션받아옴
+      };
+
+      if (typeof user.genre === 'string') {
+        user.genre = user.genre.split(',');
+      }
+      if (typeof user.position === 'string') {
+        user.position = user.position.split(',');
       }
 
-      function insertPost(connection, results, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-        var sql = "insert into matchdb.post (user_id, title, content) " +
-          "    values ( ?, ?, ?)";        //1=user.id
-        connection.query(sql, [user.id, user.title, user.content], function (err, results) {
-          connection.release();
-          if (err) {
-            callback(err);
-          } else {    //어디서 봤던 코드..?
-            callback(null);
-          }
-        });
-      }
-
-      function insertPostInterest(connection, results, callback) {
-        connection.beginTransaction(function (err) {  //오 롤백된듯? 엥 아닌가??
-          if (err) {
-            connection.release();
-            callback(err);
-          } else {
-
-            function insertMatch(callback) {
-              var sql = "INSERT into matchdb.post (user_id, title, content, limit_people, decide_people) " +
-                "VALUES ( ?, ?, ?, ?, ?)";
-              connection.query(sql, [user.id, user.title, user.content,
-                user.limit, user.decide], function (err, result) {
-                if (err) {
-                  connection.rollback();
-                  connection.release();
-                  callback(err);
-                } else {    //어디서 봤던 코드..?
-                  insertId = result.insertId;
-                  callback(null);//, connection);
-                }
-              });
-            }
-
-// todo 개수 다를때 라든지.. ㅜㅜ  언디파인(=공백=낫널..)이면 널로 넣어야할듯?
-            function insertInterests(callback) {
-// sql: 'insert into matchdb.interest (post_id, genre, position)     values ( 79, \'0\'  ~ 1 2 , NULL)' }
-              //왜 널이여..
-              var sql = "insert into matchdb.interest (post_id, genre, position) " +
-                "    values ( ?, ?, ?)";
-              async.each(interest, function (item, callback) {
-                connection.query(sql, [insertId, item[0], item[1]], function (err, results) {
-                  if (err) {
-                    callback(err);    //가장 가까운 콜백잼?
-                  } else {    //어디서 봤던 코드..?
-                    callback(null);
-                  }
-                });
-              }, function (err) {
-                if (err) {
-                  connection.rollback();
-                  connection.release();
-                  callback(err);
-                } else {
-                  connection.commit();
-                  connection.release();
-                  callback(null);
-                }
-              });
-
-            }
-
-            async.series([parseGenrePosition, getConnection, insertMatch, insertInterests], function (err, results) {
-              if (err) {
-                callback(err);
-              } else {
-                callback(null);
-              }
-            });
-
-
-          }
-        })
-      }
-
-      //1개만 왔을경우? 리밋=3 디사=언디 = 0으로..   리밋?? 디사 3 ==??? 매칭?
-      // 리밋이 1보다 작은경우...=매칭..?
-      // 숫자가 아닐경우........ NaN!!!??
-      // 리밋보다 디사가 클경우...........
-
-      if (user.limit === undefined) { //됨
-        async.waterfall([getConnection, selectMember, insertPost], function (err, result) {
-          if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
-            next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
-          } else {    //동적 프로퍼티 생성?!?!
-            var result = {
-              "success": {
-                "message": "body로 게시글이 작성되었습니다.",
-                //"userInput": user
-              }
-            };
-            res.json(result);        //더미!!!!응답!!!!!!
-          }
-        });
-      } else {
-        async.waterfall([getConnection, selectMember, insertPostInterest], function (err, result) {
-          if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
-            next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
-          } else {    //동적 프로퍼티 생성?!?!
-            var result = {
-              "success": {
-                "message": "body로 매칭게시글이 작성되었습니다.",
-                //"userInput": user
-              }
-            };
-            res.json(result);        //더미!!!!응답!!!!!!
-          }
-        });
-      }
-
-
-    } else { // 파일을 포함한  때 ('multipart/form-data; boundary=----...')
-      var form = new formidable.IncomingForm();
-      form.uploadDir = path.join(__dirname, '../uploads');
-      form.keepExtensions = true;
-      form.multiples = true;
-      form.maxFieldsSize = 10 * 1024 * 1024;      // 10MB !!
-      form.parse(req, function (err, fields, files) {
-        var results = [];
-
-        function deleteS3Links() {
-          async.each(results, function (item, cb) {
-            var s3 = new AWS.S3({
-              "accessKeyId": s3Config.key,
-              "secretAccessKey": s3Config.secret,
-              "region": s3Config.region
-            });
-            var params = {
-              "Bucket": s3Config.bucket,       // 목적지의 이름
-              "Key": s3Config.imageDir + "/" + path.basename(item.s3URL)
-            };
-
-            s3.deleteObject(params, function (err, data) {
-              if (err) {
-                console.log(err, err.stack);//실패시 로깅...
-              }
-            });
-          }, function (err) {
-            if (err) {
-              callback(err);//로깅? ㅜㅜ
-            } else {
-              callback(err);
-            }
-          });
-        }
-
-        function parseGenrePosition(callback) {
-
-          var i = 0;
-
-          function each1(cb1) {
-            async.eachSeries(user.genre, function (item, cb) {
-              interest.push([item]);
-              //interest.push({"genre": item});
-              cb();
-            }, function (err) {
-              if (err) {
-
-                callback(err);
-              }
-              console.log('인터1',interest);
-              cb1();
-            });
-          };
-
-          function each2(cb2) {
-            var i = 0;
-            async.eachSeries(user.position, function (item, cb) {
-              interest[i++].push(item);
-              console.log('인터2',interest);
-              cb();
-            }, function (err) {
-              if (err) {
-                callback(err);
-              }
-              console.log('인터22',interest);
-              cb2();
-            });
-          }
-
-          async.series([each1, each2], function (err, results) {
-            if (err) {
-              callback(err);
-            } else {
-
-              callback(null);
-            }
-          });
-
-        }
-
-        var user = {
-          "id": userId,
-          "title": fields.title,
-          "content": fields.content,
-          "limit": fields.limit,  //  언디파인이면 게시글
-          "decide": fields.decide, //  값 존재 = 매칭!!
-          "genre": fields.genre,  // 장르 받아옴
-          "position": fields.position // 포지션받아옴
-        };
-
-        if (typeof user.genre === 'string') {
-          user.genre = user.genre.split(',');
-        }
-        if (typeof user.position === 'string') {
-          user.position = user.position.split(',');
-        }
-
-        if (files['photo'] instanceof Array) { // 사진을 여러 개 업로드 할 경우 async.each() ...
-          async.each(files['photo'], function (file, cb) {
-            var mimeType = mime.lookup(path.basename(file.path));
-            var s3 = new AWS.S3({
-              "accessKeyId": s3Config.key,
-              "secretAccessKey": s3Config.secret,
-              "region": s3Config.region,
-              "params": {
-                "Bucket": s3Config.bucket,
-                "Key": s3Config.imageDir + "/" + path.basename(file.path), // 목적지의 이름
-                "ACL": s3Config.imageACL,
-                "ContentType": mimeType //mime.lookup
-              }
-            });
-            var body = fs.createReadStream(file.path);
-            s3.upload({"Body": body})
-              .on('httpUploadProgress', function (event) {
-                console.log(event);
-              })
-              .send(function (err, data) {
-                if (err) {
-                  var err = new Error();
-                  err.message = "업로드s에 실패하셨습니다."
-                  cb(err);
-                } else {
-                  fs.unlink(file.path, function () {
-                    //console.log(file.path + " 파일이 삭제되었습니다...");
-                  });
-                  results.push({"s3URL": data.Location}); // 링크데이터
-                  cb();
-                }
-              });
-          }, function (err) {
-            if (err) {
-              callback(err);
-            } else {
-
-              function transPostLinks(connection, callback) {
-                connection.beginTransaction(function (err) {
-                  if (err) {
-                    connection.release();
-                    callback(err);
-                  } else {
-
-                    var insertPostId;
-
-                    function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-                      var sql = "insert into matchdb.post (user_id, title, content)" +
-                        "values ( ?, ?, ?)";        //1=user.id
-                      connection.query(sql, [user.id, user.title, user.content], function (err, result) {
-                        if (err) {
-                          connection.rollback();
-                          connection.release();
-                          callback(err);
-                        } else {    //어디서 봤던 코드..?
-                          insertPostId = result.insertId;
-                          callback(null);
-                        }
-                      });
-                    }
-
-                    var insertResults = [];//new link id
-                    function insertNewLinks(callback) {
-                      var sql = "INSERT INTO matchdb.file (post_id, path) " +
-                        "VALUES ( ? , ? )";
-                      async.each(results, function (item, callback) {
-
-                        connection.query(sql, [insertPostId, item.s3URL], function (err, result) {
-                          if (err) {
-                            var s3 = new AWS.S3({
-                              "accessKeyId": s3Config.key,
-                              "secretAccessKey": s3Config.secret,
-                              "region": s3Config.region
-                            });
-                            var params = {
-                              "Bucket": s3Config.bucket,       // 목적지의 이름
-                              "Key": s3Config.imageDir + "/" + path.basename(item.s3URL)
-                            };
-
-                            s3.deleteObject(params, function (err, data) {
-                              if (err) {
-                                console.log(err, err.stack);//실패시 로깅...
-                              }
-                            });
-                            callback(err);
-                          } else {
-                            insertResults.push(result.insertId);
-                            callback(null);
-                          }
-                        });
-                      }, function (err) {
-                        if (err) {
-                          connection.rollback();
-                          connection.release();
-                          callback(err);
-                        } else {
-                          connection.commit();
-                          connection.release();
-                          callback(null);
-                        }
-                      });
-                    }
-
-                    async.series([insertPost, insertNewLinks], function (err) {
-                      if (err) {
-                        callback(err);  //already release
-                      } else {
-                        callback(null);
-                      }
-                    });
-                  }
-                });
-
-              }
-
-              function transPostLinksInterests(connection, callback) {
-                connection.beginTransaction(function (err) {
-                  if (err) {
-                    connection.release();
-                    callback(err);
-                  } else {
-
-                    var insertPostId;
-                    function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-                      var sql = "insert into matchdb.post (user_id, title, content)" +
-                        "values ( ?, ?, ?)";        //1=user.id
-                      connection.query(sql, [user.id, user.title, user.content], function (err, result) {
-                        if (err) {
-                          connection.rollback();
-                          connection.release();
-                          callback(err);
-                        } else {    //어디서 봤던 코드..?
-                          insertPostId = result.insertId;
-                          callback(null);
-                        }
-                      });
-                    }
-
-                    var insertResults = [];//new link id
-                    function insertNewLinks(callback) {
-                      var sql = "INSERT INTO matchdb.file (post_id, path) " +
-                        "VALUES ( ? , ? )";
-                      async.each(results, function (item, callback) {
-
-                        connection.query(sql, [insertPostId, item.s3URL], function (err, result) {
-                          if (err) {
-                            callback(err);
-                          } else {
-                            insertResults.push(result.insertId);
-                            callback(null);
-                          }
-                        });
-                      }, function (err) {
-                        if (err) {
-                          connection.rollback();
-                          connection.release();
-                          callback(err);
-                        } else {
-                          callback(null);
-                        }
-                      });
-                    }
-
-                    var interest = [];
-                    function parseGenrePosition(callback) {
-                      var i = 0;
-                      console.log('유저',user);
-                      function each1(cb1) {
-                        async.eachSeries(user.genre, function (item, cb) {
-                          interest.push([item]);
-                          cb(null);
-                        }, function (err) {
-                          if (err) {
-                            callback(err);
-                          }
-                          cb1(null);
-                        });
-                      }
-
-                      function each2(cb2) {
-                        var i = 0;
-                        async.eachSeries(user.position, function (item, cb) {
-                          interest[i++].push(item);
-                          cb(null);
-                        }, function (err) {
-                          if (err) {
-                            callback(err);
-                          }
-                          cb2(null);
-                        });
-                      }
-
-                      async.series([each1, each2], function (err, results) {
-                        if (err) {
-                          callback(err);
-                        } else {
-
-                          callback(null);
-                        }
-                      });
-
-                    }
-
-                    function insertInterests(callback) {
-
-                      var sql = "insert into matchdb.interest (post_id, genre, position) " +
-                        "    values ( ?, ?, ?)";
-                      async.each(interest, function (item, callback) {
-                        connection.query(sql, [insertPostId, item[0], item[1]], function (err, results) {
-                          if (err) {
-                            connection.rollback();
-                            connection.release();
-                            callback(err);    //가장 가까운 콜백잼?
-                          } else {    //어디서 봤던 코드..?
-                            callback(null);
-                          }
-                        });
-                      }, function (err) {
-                        if (err) {
-                          callback(err);
-                        } else {
-                          connection.commit();
-                          connection.release();
-                          callback(null);
-                        }
-                      });
-
-                    }
-
-                    async.series([insertPost, insertNewLinks, parseGenrePosition,insertInterests], function (err) {
-                      if (err) {
-                        callback(err);  //already release
-                      } else {
-                        callback(null);
-                      }
-                    });
-                  }
-                });
-
-
-              }
-
-
-              if (user.limit === undefined) { //됨
-                async.waterfall([getConnection, transPostLinks], function (err, result) {
-                  if (err) {
-                    deleteS3Links();
-                    var err = {
-                      "message": "글 작성 실패"
-                    };
-                    next(err);
-                  } else {
-                    var result = {
-                      "success": {
-                        "message": "파일 업로드s 게시 완료"
-                      }
-                    }
-                    res.json(result);
-                  }
-                });
-              } else {
-                async.waterfall([getConnection, transPostLinksInterests], function (err, result) {
-                  if (err) {
-                    deleteS3Links();
-                    next(err);
-                  } else {
-                    var result = {
-                      "success": {
-                        "message": "파일 업로드s 매칭 완료"
-                      }
-                    }
-                    res.json(result);
-                  }
-                });
-              }
-            }
-          });
-        } else if (!files['photo']) { // 사진을 올리지 않은 경우
-
-          //전역으로 주면 없다고 에러남 ㅜㅜ
-          function selectMember(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-            var sql = "SELECT nickname, genre, position, photo_path " +
-              "FROM matchdb.user " +
-              "WHERE id = ?";
-            connection.query(sql, [user.id], function (err, results) {
-              if (err) {
-                connection.release();
-                callback(err);
-              } else {    //어디서 봤던 코드..?
-                callback(null, connection, results);
-              }
-            });
-          }
-
-          function insertPost(connection, results, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-            var sql = "insert into matchdb.post (user_id, title, content) " +
-              "    values ( ?, ?, ?)";        //1=user.id
-            connection.query(sql, [user.id, user.title, user.content], function (err, results) {
-              connection.release();
-              if (err) {
-                callback(err);
-              } else {    //어디서 봤던 코드..?
-                callback(null);
-              }
-            });
-          }
-
-          function insertPostInterest(connection, results, callback) {
-            connection.beginTransaction(function (err) {  //오 롤백된듯? 엥 아닌가??
-              if (err) {
-                connection.release();
-                callback(err);
-              } else {
-
-                function insertMatch(callback) {
-                  var sql = "INSERT into matchdb.post (user_id, title, content, limit_people, decide_people) " +
-                    "VALUES ( ?, ?, ?, ?, ?)";
-                  connection.query(sql, [user.id, user.title, user.content,
-                    user.limit, user.decide], function (err, result) {
-                    if (err) {
-                      connection.rollback();
-                      connection.release();
-                      callback(err);
-                    } else {    //어디서 봤던 코드..?
-                      insertId = result.insertId;
-                      callback(null);//, connection);
-                    }
-                  });
-                }
-
-// todo 개수 다를때 라든지.. ㅜㅜ  언디파인(=공백=낫널..)이면 널로 넣어야할듯?
-                function insertInterests(callback) {
-// sql: 'insert into matchdb.interest (post_id, genre, position)     values ( 79, \'0\'  ~ 1 2 , NULL)' }
-                  //왜 널이여..
-                  var sql = "insert into matchdb.interest (post_id, genre, position) " +
-                    "    values ( ?, ?, ?)";
-                  console.log('인터',interest);
-                  async.each(interest, function (item, callback) {
-                    connection.query(sql, [insertId, item[0], item[1]], function (err, results) {
-                      if (err) {
-                        callback(err);    //가장 가까운 콜백잼?
-                      } else {    //어디서 봤던 코드..?
-                        callback(null);
-                      }
-                    });
-                  }, function (err) {
-                    if (err) {
-                      connection.rollback();
-                      connection.release();
-                      callback(err);
-                    } else {
-                      connection.commit();
-                      connection.release();
-                      callback(null);
-                    }
-                  });
-
-                }
-
-                async.series([parseGenrePosition, getConnection, insertMatch, insertInterests], function (err, results) {
-                  if (err) {
-                    callback(err);
-                  } else {
-                    callback(null);
-                  }
-                });
-
-
-              }
-            })
-          }
-
-          if (user.limit === undefined) { //됨
-            async.waterfall([getConnection, selectMember, insertPost], function (err, result) {
-              if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
-                next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
-              } else {    //동적 프로퍼티 생성?!?!
-                var result = {
-                  "success": {
-                    "message": "body로 게시글이 작성되었습니다.",
-                    //"userInput": user
-                  }
-                };
-                res.json(result);        //더미!!!!응답!!!!!!
-              }
-            });
-          } else {
-            async.waterfall([getConnection, selectMember, insertPostInterest], function (err, result) {
-              if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
-                next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
-              } else {    //동적 프로퍼티 생성?!?!
-                var result = {
-                  "success": {
-                    "message": "body로 매칭게시글이 작성되었습니다.",
-                    //"userInput": user
-                  }
-                };
-                res.json(result);        //더미!!!!응답!!!!!!
-              }
-            });
-          }
-
-        } else { // 기타 (사진을 하나 올렸을 경우)
+      if (files['photo'] instanceof Array) { // 사진을 여러 개 업로드 할 경우 async.each() ...
+        async.each(files['photo'], function (file, cb) {
+          var mimeType = mime.lookup(path.basename(file.path));
           var s3 = new AWS.S3({
             "accessKeyId": s3Config.key,
             "secretAccessKey": s3Config.secret,
             "region": s3Config.region,
             "params": {
               "Bucket": s3Config.bucket,
-              "Key": s3Config.imageDir + "/" + path.basename(files['photo'].path), // 목적지의 이름
+              "Key": s3Config.imageDir + "/" + path.basename(file.path), // 목적지의 이름
               "ACL": s3Config.imageACL,
-              "ContentType": "image/jpeg" //mime.lookup
+              "ContentType": mimeType //mime.lookup
             }
           });
+          var body = fs.createReadStream(file.path);
+          s3.upload({"Body": body})
+            .on('httpUploadProgress', function (event) {
+              console.log(event);
+            })
+            .send(function (err, data) {
+              if (err) {
+                var err = new Error();
+                err.message = "업로드s에 실패하셨습니다."
+                cb(err);
+              } else {
+                fs.unlink(file.path, function () {
+                  //console.log(file.path + " 파일이 삭제되었습니다...");
+                });
+                results.push({"s3URL": data.Location}); // 링크데이터
+                cb();
+              }
+            });
+        }, function (err) {
+          if (err) {
+            callback(err);
+          } else {
 
-          var resultURL;
-          function UploadServer(callback) {
-            var body = fs.createReadStream(files['photo'].path);
-            s3.upload({"Body": body})
-              .on('httpUploadProgress', function (event) {
-                console.log(event);
-              })
-              .send(function (err, data) {
+            function transPostLinks(connection, callback) {
+              connection.beginTransaction(function (err) {
                 if (err) {
-                  console.log(err);
+                  connection.release();
                   callback(err);
                 } else {
-                  console.log(data);
-                  fs.unlink(files['photo'].path, function () {
-                    console.log(files['photo'].path + " 파일이 삭제되었습니다...");
-                  });
-                  resultURL = data.Location;
-                  callback(null);
-                }
-              });
-          }
 
-          function transPostLink(connection, callback) {
-            connection.beginTransaction(function (err) {
-              if (err) {
-                connection.release();
-                callback(err);
-              } else {
+                  var insertPostId;
 
-                var insertPostId;
-                function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-                  var sql = "insert into matchdb.post (user_id, title, content)" +
-                    "values ( ?, ?, ?)";        //1=user.id
-                  connection.query(sql, [user.id, user.title, user.content], function (err, result) {
-                    if (err) {
-                      connection.rollback();
-                      connection.release();
-                      callback(err);
-                    } else {    //어디서 봤던 코드..?
-                      insertPostId = result.insertId;
-                      callback(null);
-                    }
-                  });
-                }
-
-                function insertNewLink(callback) {
-                  var sql = "INSERT INTO matchdb.file (post_id, path) " +
-                    "VALUES ( ? , ? )";
-
-                    connection.query(sql, [insertPostId, resultURL], function (err, result) {
+                  function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+                    var sql = "insert into matchdb.post (user_id, title, content)" +
+                      "values ( ?, ?, ?)";        //1=user.id
+                    connection.query(sql, [user.id, user.title, user.content], function (err, result) {
                       if (err) {
+                        connection.rollback();
+                        connection.release();
+                        callback(err);
+                      } else {    //어디서 봤던 코드..?
+                        insertPostId = result.insertId;
+                        callback(null);
+                      }
+                    });
+                  }
 
+                  var insertResults = [];//new link id
+                  function insertNewLinks(callback) {
+                    var sql = "INSERT INTO matchdb.file (post_id, path) " +
+                      "VALUES ( ? , ? )";
+                    async.each(results, function (item, callback) {
+
+                      connection.query(sql, [insertPostId, item.s3URL], function (err, result) {
+                        if (err) {
+                          var s3 = new AWS.S3({
+                            "accessKeyId": s3Config.key,
+                            "secretAccessKey": s3Config.secret,
+                            "region": s3Config.region
+                          });
+                          var params = {
+                            "Bucket": s3Config.bucket,       // 목적지의 이름
+                            "Key": s3Config.imageDir + "/" + path.basename(item.s3URL)
+                          };
+
+                          s3.deleteObject(params, function (err, data) {
+                            if (err) {
+                              console.log(err, err.stack);//실패시 로깅...
+                            }
+                          });
+                          callback(err);
+                        } else {
+                          insertResults.push(result.insertId);
+                          callback(null);
+                        }
+                      });
+                    }, function (err) {
+                      if (err) {
                         connection.rollback();
                         connection.release();
                         callback(err);
@@ -836,53 +461,99 @@ router.post('/', isLoggedIn, function (req, res, next) {
                         callback(null);
                       }
                     });
-
-                }
-
-                async.series([insertPost, insertNewLink], function (err) {
-                  if (err) {
-                    callback(err);  //already release
-                  } else {
-                    callback(null);
                   }
-                });
-              }
-            });
 
-          }
-
-          function transPostLinkInterests(connection, callback) {
-            connection.beginTransaction(function (err) {
-              if (err) {
-                connection.release();
-                callback(err);
-              } else {
-
-                var insertPostId;
-                function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-                  var sql = "insert into matchdb.post (user_id, title, content)" +
-                    "values ( ?, ?, ?)";        //1=user.id
-                  connection.query(sql, [user.id, user.title, user.content], function (err, result) {
+                  async.series([insertPost, insertNewLinks], function (err) {
                     if (err) {
-                      connection.rollback();
-                      connection.release();
-                      callback(err);
-                    } else {    //어디서 봤던 코드..?
-                      insertPostId = result.insertId;
-                      console.log('인서트아디',insertId);
+                      callback(err);  //already release
+                    } else {
                       callback(null);
                     }
                   });
                 }
+              });
 
-                function insertNewLink(callback) {
-                  var sql = "INSERT INTO matchdb.file (post_id, path) " +
-                    "VALUES ( ? , ? )";
+            }
 
-                    connection.query(sql, [insertPostId, resultURL], function (err, result) {
+            function transPostLinksInterests(connection, callback) {
+              connection.beginTransaction(function (err) {
+                if (err) {
+                  connection.release();
+                  callback(err);
+                } else {
+
+                  var insertPostId;
+                  function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+                    var sql = "insert into matchdb.post (user_id, title, content)" +
+                      "values ( ?, ?, ?)";        //1=user.id
+                    connection.query(sql, [user.id, user.title, user.content], function (err, result) {
                       if (err) {
                         connection.rollback();
                         connection.release();
+                        callback(err);
+                      } else {    //어디서 봤던 코드..?
+                        insertPostId = result.insertId;
+                        callback(null);
+                      }
+                    });
+                  }
+
+                  var insertResults = [];//new link id
+                  function insertNewLinks(callback) {
+                    var sql = "INSERT INTO matchdb.file (post_id, path) " +
+                      "VALUES ( ? , ? )";
+                    async.each(results, function (item, callback) {
+
+                      connection.query(sql, [insertPostId, item.s3URL], function (err, result) {
+                        if (err) {
+                          callback(err);
+                        } else {
+                          insertResults.push(result.insertId);
+                          callback(null);
+                        }
+                      });
+                    }, function (err) {
+                      if (err) {
+                        connection.rollback();
+                        connection.release();
+                        callback(err);
+                      } else {
+                        callback(null);
+                      }
+                    });
+                  }
+
+                  var interest = [];
+                  function parseGenrePosition(callback) {
+                    var i = 0;
+                    console.log('유저',user);
+                    function each1(cb1) {
+                      async.eachSeries(user.genre, function (item, cb) {
+                        interest.push([item]);
+                        cb(null);
+                      }, function (err) {
+                        if (err) {
+                          callback(err);
+                        }
+                        cb1(null);
+                      });
+                    }
+
+                    function each2(cb2) {
+                      var i = 0;
+                      async.eachSeries(user.position, function (item, cb) {
+                        interest[i++].push(item);
+                        cb(null);
+                      }, function (err) {
+                        if (err) {
+                          callback(err);
+                        }
+                        cb2(null);
+                      });
+                    }
+
+                    async.series([each1, each2], function (err, results) {
+                      if (err) {
                         callback(err);
                       } else {
 
@@ -890,141 +561,470 @@ router.post('/', isLoggedIn, function (req, res, next) {
                       }
                     });
 
-                }
+                  }
 
-                var interest = [];
-                function parseGenrePosition(callback) {
-                  var i = 0;
-                  console.log('유저',user);
-                  function each1(cb1) {
-                    async.eachSeries(user.genre, function (item, cb) {
-                      interest.push([item]);
-                      cb(null);
+                  function insertInterests(callback) {
+
+                    var sql = "insert into matchdb.interest (post_id, genre, position) " +
+                      "    values ( ?, ?, ?)";
+                    async.each(interest, function (item, callback) {
+                      connection.query(sql, [insertPostId, item[0], item[1]], function (err, results) {
+                        if (err) {
+                          connection.rollback();
+                          connection.release();
+                          callback(err);    //가장 가까운 콜백잼?
+                        } else {    //어디서 봤던 코드..?
+                          callback(null);
+                        }
+                      });
                     }, function (err) {
                       if (err) {
                         callback(err);
-                      }
-                      cb1(null);
-                    });
-                  }
-
-                  function each2(cb2) {
-                    var i = 0;
-                    async.eachSeries(user.position, function (item, cb) {
-                      interest[i++].push(item);
-                      cb(null);
-                    }, function (err) {
-                      if (err) {
-                        callback(err);
-                      }
-                      cb2(null);
-                    });
-                  }
-
-                  async.series([each1, each2], function (err, results) {
-                    if (err) {
-                      callback(err);
-                    } else {
-
-                      callback(null);
-                    }
-                  });
-
-                }
-
-                function insertInterests(callback) {
-
-                  var sql = "insert into matchdb.interest (post_id, genre, position) " +
-                    "    values ( ?, ?, ?)";
-                  async.each(interest, function (item, callback) {
-                    connection.query(sql, [insertPostId, item[0], item[1]], function (err, results) {
-                      if (err) {
-                        callback(err);    //가장 가까운 콜백잼?
-                      } else {    //어디서 봤던 코드..?
+                      } else {
+                        connection.commit();
+                        connection.release();
                         callback(null);
                       }
                     });
-                  }, function (err) {
+
+                  }
+
+                  async.series([insertPost, insertNewLinks, parseGenrePosition,insertInterests], function (err) {
                     if (err) {
-                      connection.rollback();
-                      connection.release();
-                      callback(err);
+                      callback(err);  //already release
                     } else {
-                      connection.commit();
-                      connection.release();
                       callback(null);
                     }
                   });
-
                 }
+              });
 
-                async.series([insertPost, insertNewLink, parseGenrePosition,insertInterests], function (err) {
+
+            }
+
+
+            if (user.limit === undefined) { //됨
+              async.waterfall([getConnection, transPostLinks], function (err, result) {
+                if (err) {
+                  deleteS3Links();
+                  var err = {
+                    "message": "글 작성 실패"
+                  };
+                  next(err);
+                } else {
+                  var result = {
+                    "success": {
+                      "message": "파일 업로드s 게시 완료"
+                    }
+                  }
+                  res.json(result);
+                }
+              });
+            } else {
+              async.waterfall([getConnection, transPostLinksInterests], function (err, result) {
+                if (err) {
+                  deleteS3Links();
+                  next(err);
+                } else {
+                  var result = {
+                    "success": {
+                      "message": "파일 업로드s 매칭 완료"
+                    }
+                  }
+                  res.json(result);
+                }
+              });
+            }
+          }
+        });
+      } else if (!files['photo']) { // 사진을 올리지 않은 경우
+
+        //전역으로 주면 없다고 에러남 ㅜㅜ
+        function selectMember(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+          var sql = "SELECT nickname, genre, position, photo_path " +
+            "FROM matchdb.user " +
+            "WHERE id = ?";
+          connection.query(sql, [user.id], function (err, results) {
+            if (err) {
+              connection.release();
+              callback(err);
+            } else {    //어디서 봤던 코드..?
+              callback(null, connection, results);
+            }
+          });
+        }
+
+        function insertPost(connection, results, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+          var sql = "insert into matchdb.post (user_id, title, content) " +
+            "    values ( ?, ?, ?)";        //1=user.id
+          connection.query(sql, [user.id, user.title, user.content], function (err, results) {
+            connection.release();
+            if (err) {
+              callback(err);
+            } else {    //어디서 봤던 코드..?
+              callback(null);
+            }
+          });
+        }
+
+        function insertPostInterest(connection, results, callback) {
+          connection.beginTransaction(function (err) {  //오 롤백된듯? 엥 아닌가??
+            if (err) {
+              connection.release();
+              callback(err);
+            } else {
+
+              function insertMatch(callback) {
+                var sql = "INSERT into matchdb.post (user_id, title, content, limit_people, decide_people) " +
+                  "VALUES ( ?, ?, ?, ?, ?)";
+                connection.query(sql, [user.id, user.title, user.content,
+                  user.limit, user.decide], function (err, result) {
                   if (err) {
-                    callback(err);  //already release
+                    connection.rollback();
+                    connection.release();
+                    callback(err);
+                  } else {    //어디서 봤던 코드..?
+                    insertId = result.insertId;
+                    callback(null);//, connection);
+                  }
+                });
+              }
+
+// todo 개수 다를때 라든지.. ㅜㅜ  언디파인(=공백=낫널..)이면 널로 넣어야할듯?
+              function insertInterests(callback) {
+// sql: 'insert into matchdb.interest (post_id, genre, position)     values ( 79, \'0\'  ~ 1 2 , NULL)' }
+                //왜 널이여..
+                var sql = "insert into matchdb.interest (post_id, genre, position) " +
+                  "    values ( ?, ?, ?)";
+                console.log('인터',interest);
+                async.each(interest, function (item, callback) {
+                  connection.query(sql, [insertId, item[0], item[1]], function (err, results) {
+                    if (err) {
+                      callback(err);    //가장 가까운 콜백잼?
+                    } else {    //어디서 봤던 코드..?
+                      callback(null);
+                    }
+                  });
+                }, function (err) {
+                  if (err) {
+                    connection.rollback();
+                    connection.release();
+                    callback(err);
                   } else {
+                    connection.commit();
+                    connection.release();
+                    callback(null);
+                  }
+                });
+
+              }
+
+              async.series([parseGenrePosition, getConnection, insertMatch, insertInterests], function (err, results) {
+                if (err) {
+                  callback(err);
+                } else {
+                  callback(null);
+                }
+              });
+
+
+            }
+          })
+        }
+
+        if (user.limit === undefined) { //됨
+          async.waterfall([getConnection, selectMember, insertPost], function (err, result) {
+            if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+              next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
+            } else {    //동적 프로퍼티 생성?!?!
+              var result = {
+                "success": {
+                  "message": "body로 게시글이 작성되었습니다.",
+                  //"userInput": user
+                }
+              };
+              res.json(result);        //더미!!!!응답!!!!!!
+            }
+          });
+        } else {
+          async.waterfall([getConnection, selectMember, insertPostInterest], function (err, result) {
+            if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+              next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
+            } else {    //동적 프로퍼티 생성?!?!
+              var result = {
+                "success": {
+                  "message": "body로 매칭게시글이 작성되었습니다.",
+                  //"userInput": user
+                }
+              };
+              res.json(result);        //더미!!!!응답!!!!!!
+            }
+          });
+        }
+
+      } else { // 기타 (사진을 하나 올렸을 경우)
+        var s3 = new AWS.S3({
+          "accessKeyId": s3Config.key,
+          "secretAccessKey": s3Config.secret,
+          "region": s3Config.region,
+          "params": {
+            "Bucket": s3Config.bucket,
+            "Key": s3Config.imageDir + "/" + path.basename(files['photo'].path), // 목적지의 이름
+            "ACL": s3Config.imageACL,
+            "ContentType": "image/jpeg" //mime.lookup
+          }
+        });
+
+        var resultURL;
+        function UploadServer(callback) {
+          var body = fs.createReadStream(files['photo'].path);
+          s3.upload({"Body": body})
+            .on('httpUploadProgress', function (event) {
+              console.log(event);
+            })
+            .send(function (err, data) {
+              if (err) {
+                console.log(err);
+                callback(err);
+              } else {
+                console.log(data);
+                fs.unlink(files['photo'].path, function () {
+                  console.log(files['photo'].path + " 파일이 삭제되었습니다...");
+                });
+                resultURL = data.Location;
+                callback(null);
+              }
+            });
+        }
+
+        function transPostLink(connection, callback) {
+          connection.beginTransaction(function (err) {
+            if (err) {
+              connection.release();
+              callback(err);
+            } else {
+
+              var insertPostId;
+              function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+                var sql = "insert into matchdb.post (user_id, title, content)" +
+                  "values ( ?, ?, ?)";        //1=user.id
+                connection.query(sql, [user.id, user.title, user.content], function (err, result) {
+                  if (err) {
+                    connection.rollback();
+                    connection.release();
+                    callback(err);
+                  } else {    //어디서 봤던 코드..?
+                    insertPostId = result.insertId;
                     callback(null);
                   }
                 });
               }
-            });
 
+              function insertNewLink(callback) {
+                var sql = "INSERT INTO matchdb.file (post_id, path) " +
+                  "VALUES ( ? , ? )";
 
-          }
+                connection.query(sql, [insertPostId, resultURL], function (err, result) {
+                  if (err) {
 
-          function deleteS3Link(){
-            var s3 = new AWS.S3({
-              "accessKeyId": s3Config.key,
-              "secretAccessKey": s3Config.secret,
-              "region": s3Config.region
-            });
-            var params = {
-              "Bucket": s3Config.bucket,       // 목적지의 이름
-              "Key": s3Config.imageDir + "/" + path.basename(resultURL)
-            };
-
-            s3.deleteObject(params, function (err, data) {
-              if (err) {
-                console.log(err, err.stack);//실패시 로깅...
-              }
-            });
-          }
-
-          if (user.limit === undefined) { //됨
-            async.waterfall([UploadServer, getConnection, transPostLink], function (err, result) {
-              if (err) {
-                deleteS3Link();
-                var err = {
-                  "message": "글 작성 실패"
-                };
-                next(err);
-              } else {
-                var result = {
-                  "success": {
-                    "message": "파일 업로드 게시 완료"
+                    connection.rollback();
+                    connection.release();
+                    callback(err);
+                  } else {
+                    connection.commit();
+                    connection.release();
+                    callback(null);
                   }
-                }
-                res.json(result);
+                });
+
               }
-            });
-          } else {
-            async.waterfall([UploadServer, getConnection, transPostLinkInterests], function (err, result) {
-              if (err) {
-                deleteS3Link();
-                next(err);
-              } else {
-                var result = {
-                  "success": {
-                    "message": "파일 업로드 매칭 완료"
-                  }
+
+              async.series([insertPost, insertNewLink], function (err) {
+                if (err) {
+                  callback(err);  //already release
+                } else {
+                  callback(null);
                 }
-                res.json(result);
-              }
-            });
-          }
+              });
+            }
+          });
 
         }
-      });
-    }
+
+        function transPostLinkInterests(connection, callback) {
+          connection.beginTransaction(function (err) {
+            if (err) {
+              connection.release();
+              callback(err);
+            } else {
+
+              var insertPostId;
+              function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+                var sql = "insert into matchdb.post (user_id, title, content)" +
+                  "values ( ?, ?, ?)";        //1=user.id
+                connection.query(sql, [user.id, user.title, user.content], function (err, result) {
+                  if (err) {
+                    connection.rollback();
+                    connection.release();
+                    callback(err);
+                  } else {    //어디서 봤던 코드..?
+                    insertPostId = result.insertId;
+                    console.log('인서트아디',insertId);
+                    callback(null);
+                  }
+                });
+              }
+
+              function insertNewLink(callback) {
+                var sql = "INSERT INTO matchdb.file (post_id, path) " +
+                  "VALUES ( ? , ? )";
+
+                connection.query(sql, [insertPostId, resultURL], function (err, result) {
+                  if (err) {
+                    connection.rollback();
+                    connection.release();
+                    callback(err);
+                  } else {
+
+                    callback(null);
+                  }
+                });
+
+              }
+
+              var interest = [];
+              function parseGenrePosition(callback) {
+                var i = 0;
+                console.log('유저',user);
+                function each1(cb1) {
+                  async.eachSeries(user.genre, function (item, cb) {
+                    interest.push([item]);
+                    cb(null);
+                  }, function (err) {
+                    if (err) {
+                      callback(err);
+                    }
+                    cb1(null);
+                  });
+                }
+
+                function each2(cb2) {
+                  var i = 0;
+                  async.eachSeries(user.position, function (item, cb) {
+                    interest[i++].push(item);
+                    cb(null);
+                  }, function (err) {
+                    if (err) {
+                      callback(err);
+                    }
+                    cb2(null);
+                  });
+                }
+
+                async.series([each1, each2], function (err, results) {
+                  if (err) {
+                    callback(err);
+                  } else {
+
+                    callback(null);
+                  }
+                });
+
+              }
+
+              function insertInterests(callback) {
+
+                var sql = "insert into matchdb.interest (post_id, genre, position) " +
+                  "    values ( ?, ?, ?)";
+                async.each(interest, function (item, callback) {
+                  connection.query(sql, [insertPostId, item[0], item[1]], function (err, results) {
+                    if (err) {
+                      callback(err);    //가장 가까운 콜백잼?
+                    } else {    //어디서 봤던 코드..?
+                      callback(null);
+                    }
+                  });
+                }, function (err) {
+                  if (err) {
+                    connection.rollback();
+                    connection.release();
+                    callback(err);
+                  } else {
+                    connection.commit();
+                    connection.release();
+                    callback(null);
+                  }
+                });
+
+              }
+
+              async.series([insertPost, insertNewLink, parseGenrePosition,insertInterests], function (err) {
+                if (err) {
+                  callback(err);  //already release
+                } else {
+                  callback(null);
+                }
+              });
+            }
+          });
+
+
+        }
+
+        function deleteS3Link(){
+          var s3 = new AWS.S3({
+            "accessKeyId": s3Config.key,
+            "secretAccessKey": s3Config.secret,
+            "region": s3Config.region
+          });
+          var params = {
+            "Bucket": s3Config.bucket,       // 목적지의 이름
+            "Key": s3Config.imageDir + "/" + path.basename(resultURL)
+          };
+
+          s3.deleteObject(params, function (err, data) {
+            if (err) {
+              console.log(err, err.stack);//실패시 로깅...
+            }
+          });
+        }
+
+        if (user.limit === undefined) { //됨
+          async.waterfall([UploadServer, getConnection, transPostLink], function (err, result) {
+            if (err) {
+              deleteS3Link();
+              var err = {
+                "message": "글 작성 실패"
+              };
+              next(err);
+            } else {
+              var result = {
+                "success": {
+                  "message": "파일 업로드 게시 완료"
+                }
+              }
+              res.json(result);
+            }
+          });
+        } else {
+          async.waterfall([UploadServer, getConnection, transPostLinkInterests], function (err, result) {
+            if (err) {
+              deleteS3Link();
+              next(err);
+            } else {
+              var result = {
+                "success": {
+                  "message": "파일 업로드 매칭 완료"
+                }
+              }
+              res.json(result);
+            }
+          });
+        }
+
+      }
+    });
+  }
 
 });
 
@@ -1218,7 +1218,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
   }
 
   function selectPost(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-    // 페이지 안들어왔을때 처리 안한듯..ㅜ
+                                                // 페이지 안들어왔을때 처리 안한듯..ㅜ
     var pageNum = req.query.page ;
     //if (pageNum)
     var limit = 10;
@@ -1231,8 +1231,8 @@ router.get('/', isLoggedIn, function (req, res, next) {
           sql = "SELECT p.id as 'pid',  content, nickname " +
             ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
             ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
+            "       ,genre, position " +
             "FROM matchdb.post p join matchdb.user u on(u.id = p.user_id) " +
-//            "                     join matchdb.file f on(p.id = f.post_id)" +
             "WHERE nickname like " +
             connection.escape('%' + keyword + '%') + " " +
             "LIMIT ? OFFSET ? ";// +
@@ -1253,8 +1253,8 @@ router.get('/', isLoggedIn, function (req, res, next) {
           sql = "SELECT p.id as 'pid', content, nickname " +
             ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
             ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
+            "       ,genre, position " +
             "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-//            "                     join matchdb.file f on(p.id = f.post_id)" +
             "WHERE content like " +
             connection.escape('%' + keyword + '%') + " " +
             "LIMIT ? OFFSET ? ";// +
@@ -1266,8 +1266,8 @@ router.get('/', isLoggedIn, function (req, res, next) {
       sql = "SELECT p.id as 'pid', content, nickname " +
         ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
         ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
+        "       ,genre, position " +
         "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-//        "join matchdb.file f on(p.id = f.post_id)" +
         "LIMIT ? OFFSET ? ";// +
     }
 
@@ -1275,8 +1275,8 @@ router.get('/', isLoggedIn, function (req, res, next) {
       sql = "SELECT p.id as 'pid', content, nickname " +
         ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
         ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
+        "       ,genre, position " +
         "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-//        "                     join matchdb.file f on(p.id = f.post_id)" +
         "WHERE limit_people IS NOT NULL " +
         "LIMIT ? OFFSET ?";
     }
@@ -1295,8 +1295,8 @@ router.get('/', isLoggedIn, function (req, res, next) {
 //  var photos = [];
   function selectFile(connection, results, callback) {
     var sql = "SELECT path " +
-              "FROM matchdb.file " +
-              "WHERE post_id = ? ";
+      "FROM matchdb.file " +
+      "WHERE post_id = ? ";
     var i=0;
     async.each(results, function (item, cb) {
       connection.query(sql, [item.pid], function(err, result){
@@ -1564,8 +1564,9 @@ router.get('/:pid/replies', function (req, res, next) {
 
   function selectReply(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
 
-    var sql = "SELECT r.id, content, u.nickname " +
-      "         , date_format(CONVERT_TZ(comm_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'comm_date' " +
+    var sql = "SELECT r.id as 'rid', content, u.nickname, photo_path as 'profile' ,u.id as 'mid' " +
+      "       ,genre, position " +
+      "         , date_format(CONVERT_TZ(comm_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
       "FROM matchdb.comment r	join matchdb.user u on(u.id = r.user_id) " +
       "ORDER BY r.id " +
       "LIMIT ? OFFSET ? ";// +
@@ -1579,53 +1580,14 @@ router.get('/:pid/replies', function (req, res, next) {
       if (err) {
         callback(err);
       } else {    //어디서 봤던 코드..?
-        callback(null, connection, results);
-      }
-    });
-  }
-
-  function selectFile(connection, results, callback) {
-    var sql = "SELECT path " +
-      "FROM matchdb.file " +
-      "WHERE post_id = ? ";
-    var i=0;
-    async.each(results, function (item, cb) {
-      connection.query(sql, [item.id], function(err, result){
-        if (err) {
-          cb(err);
-        } else {
-          item.photo = [];//필수
-          //if(result.length) {//리절트 없는경우(path X) ㄱㄱ
-          //  item.photo = result;  //리절트 = 배열 ㅇㅇ  걍 잼
-          //}
-          //배열 없으면 아마 실행 안될껄? ㅇㅇ..
-          async.eachSeries(result, function (item2, cb) {
-            item.photo.push(item2.path);
-            cb(null);
-          }, function (err) {
-            if (err) {
-              cb(err);
-            } else {
-              cb(null);//?
-            }
-          });
-
-        }
-      });
-    }, function (err) {
-      if (err) {
-        connection.release();
-        callback(err);
-      } else {
         callback(null, results);
       }
     });
-
-
   }
 
 
-  async.waterfall([getConnecton, selectReply, selectFile], function (err, results) {
+
+  async.waterfall([getConnecton, selectReply], function (err, results) {
     if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
       next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
     } else {    //동적 프로퍼티 생성?!?!
