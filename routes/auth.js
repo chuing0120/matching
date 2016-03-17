@@ -40,7 +40,7 @@ router.post('/login', function (req, res, next) {
 	}
 });
 // 18. 로그아웃 (HTTPS)
-router.post('/logout', function (req, res, next) {
+router.get('/logout', function (req, res, next) {
 	if (req.secure) {
 		req.logout();
 		res.json({
