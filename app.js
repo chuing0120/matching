@@ -15,7 +15,6 @@ global.serverKey = process.env.FMS_DB_SERVER;
 var auth = require('./routes/auth');
 var member = require('./routes/member');
 var post = require('./routes/post');
-
 var totalexcel = require('./routes/totalexcel');
 // router level middleware modules loading
 
@@ -43,7 +42,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/auth', auth);
 app.use('/members', member);
 app.use('/posts', post);
-
 app.use('/totalexcel', totalexcel);
 
 app.use(function (req, res, next) {
