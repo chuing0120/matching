@@ -148,7 +148,7 @@ router.get('/me', isLoggedIn, function (req, res, next) {
 		var userId = req.user.id;
 
 		function selectMember(connection, callback) {
-			var sql = "SELECT username, photo_path, nickname, intro, genre, position " +
+			var sql = "SELECT username, photo_path as 'photo', nickname, intro, genre, position, id as 'mid' " +
 									"FROM matchdb.user " +
 									"WHERE id = ?";
 			connection.query(sql, [userId], function (err, results) {
@@ -183,7 +183,7 @@ router.get('/me', isLoggedIn, function (req, res, next) {
 	}
 });
 // 4. 다른 프로필 보기 (HTTPS)
-router.get('/:mid', function (req, res, next) {
+router.get('/:mid', isLoggedIn, function (req, res, next) {
 	if (req.secure) {
 		var user = {
 			"id": req.user.id,
@@ -191,7 +191,7 @@ router.get('/:mid', function (req, res, next) {
 		};
 
 		function selectMember(connection, callback) {
-			var sql = "SELECT username, photo_path, nickname, intro, genre, position " +
+			var sql = "SELECT username, photo_path as 'photo', nickname, intro, genre, position, id as 'mid' " +
 				"FROM matchdb.user " +
 				"WHERE id = ?";
 			connection.query(sql, [user.mid], function (err, results) {
