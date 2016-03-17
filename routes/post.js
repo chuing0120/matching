@@ -22,9 +22,6 @@ function isLoggedIn(req, res, next) {
 
 // 6. 매칭/스토리 쓰기 (HTTP)     파일 업로드............?? + 구인;;;;;;;;;;
 router.post('/', function (req, res, next) {
-  if (req.secure) {
-// 글쓰기 = 글 (+관심) or (+파일) ㅇㅇ...
-
 
     function getConnection(callback) {
       pool.getConnection(function (err, conn) {
@@ -1013,12 +1010,6 @@ router.post('/', function (req, res, next) {
       });
     }
 
-  } else {
-    var err = new Error();
-    err.message = "SSL/TLS Upgrade Required";
-    err.status = 426;
-    next(err);
-  }
 });
 
 // 7. 매칭/스토리 수정     파일 업로드............
@@ -1294,10 +1285,22 @@ router.get('/', function (req, res, next) {
         if (err) {
           cb(err);
         } else {
-          item.photo = [];
-          item.photo.push(result);
-          console.log('리절트',result);
-          cb(null);
+          item.photo = [];//필수
+          //if(result.length) {//리절트 없는경우(path X) ㄱㄱ
+          //  item.photo = result;  //리절트 = 배열 ㅇㅇ  걍 잼
+          //}
+          //배열 없으면 아마 실행 안될껄? ㅇㅇ..
+          async.eachSeries(result, function (item2, cb) {
+            item.photo.push(item2.path);
+            cb(null);
+          }, function (err) {
+            if (err) {
+              cb(err);
+            } else {
+              cb(null);//?
+            }
+          });
+
         }
       });
     }, function (err) {
@@ -1336,7 +1339,7 @@ router.get('/', function (req, res, next) {
 });
 
 
-// 11. 매칭/스토리 댓글쓰기
+// 11. 매칭/스토리 댓글쓰기    //req.user.id 없으면 터짐 ㅜㅜ (로그인 안되있으면 )
 router.post('/:pid/replies', function (req, res, next) {
 
 // 겟커넥션  댓글 쓰기(닉넴=세션(패포)ㄱㄱ)올..ㅋ   끝???
@@ -1357,7 +1360,7 @@ router.post('/:pid/replies', function (req, res, next) {
       "VALUES (?, ?, ?)";
 
     connection.query(sql, [req.body.content, req.params.pid, req.user.id], function (err, results) {
-      connection.release();
+      connection.release();               // req.user.id 없으면 터짐 ㅜㅜ
       if (err) {
         callback(err);
       } else {    //어디서 봤던 코드..?
@@ -1386,7 +1389,7 @@ router.post('/:pid/replies', function (req, res, next) {
 
 
 });
-// 12. 매칭/스토리 댓글수정
+// 12. 매칭/스토리 댓글수정    //req.user.id 없으면 터짐 ㅜㅜ (로그인 안되있으면 )
 router.put('/:pid/replies/:rid', function (req, res, next) {
 
   function getConnecton(callback) {
@@ -1458,6 +1461,7 @@ router.put('/:pid/replies/:rid', function (req, res, next) {
 
 });
 // 13. 매칭/스토리 댓글삭제      //pid 는 게시글 지울때에 필요할수도! (같이삭제??)
+//req.user.id 없으면 터짐 ㅜㅜ (로그인 안되있으면 )
 router.delete('/:pid/replies/:rid', function (req, res, next) {
 //겟커 작성자 id 확인후!? 지움 끝?
   function getConnecton(callback) {
@@ -1556,12 +1560,53 @@ router.get('/:pid/replies', function (req, res, next) {
       if (err) {
         callback(err);
       } else {    //어디서 봤던 코드..?
-        callback(null, results);
+        callback(null, connection, results);
       }
     });
   }
 
-  async.waterfall([getConnecton, selectReply], function (err, results) {
+  function selectFile(connection, results, callback) {
+    var sql = "SELECT path " +
+      "FROM matchdb.file " +
+      "WHERE post_id = ? ";
+    var i=0;
+    async.each(results, function (item, cb) {
+      connection.query(sql, [item.id], function(err, result){
+        if (err) {
+          cb(err);
+        } else {
+          item.photo = [];//필수
+          //if(result.length) {//리절트 없는경우(path X) ㄱㄱ
+          //  item.photo = result;  //리절트 = 배열 ㅇㅇ  걍 잼
+          //}
+          //배열 없으면 아마 실행 안될껄? ㅇㅇ..
+          async.eachSeries(result, function (item2, cb) {
+            item.photo.push(item2.path);
+            cb(null);
+          }, function (err) {
+            if (err) {
+              cb(err);
+            } else {
+              cb(null);//?
+            }
+          });
+
+        }
+      });
+    }, function (err) {
+      if (err) {
+        connection.release();
+        callback(err);
+      } else {
+        callback(null, results);
+      }
+    });
+
+
+  }
+
+
+  async.waterfall([getConnecton, selectReply, selectFile], function (err, results) {
     if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
       next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
     } else {    //동적 프로퍼티 생성?!?!
