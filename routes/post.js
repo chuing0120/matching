@@ -21,7 +21,7 @@ function isLoggedIn(req, res, next) {
 }
 
 // 6. 매칭/스토리 쓰기 (HTTP)     파일 업로드............?? + 구인;;;;;;;;;;
-router.post('/', function (req, res, next) {
+router.post('/', isLoggedIn, function (req, res, next) {
 
     function getConnection(callback) {
       pool.getConnection(function (err, conn) {
@@ -1013,7 +1013,7 @@ router.post('/', function (req, res, next) {
 });
 
 // 7. 매칭/스토리 수정     파일 업로드............
-router.put('/:pid', function (req, res, next) {
+router.put('/:pid', isLoggedIn, function (req, res, next) {
   //받아온것만...+표시   //겟커넥션  // 업데이트 조건으로 pid !!! // 끝???  헐
 // 셀렉 해와서  피플s 널이면 넣을 수 없기??
 
@@ -1111,7 +1111,7 @@ router.put('/:pid', function (req, res, next) {
 
 
 // 8. 매칭/스토리 삭제     // 연결된 댓글도 삭제;;;;  + 연결된 파일도 삭제;;;;  (셋 널 ㄱㄱ)
-router.delete('/:pid', function (req, res, next) {
+router.delete('/:pid', isLoggedIn, function (req, res, next) {
 
   var user = {
     "id": req.user.id, //req.session.userId,
@@ -1340,7 +1340,7 @@ router.get('/', function (req, res, next) {
 
 
 // 11. 매칭/스토리 댓글쓰기    //req.user.id 없으면 터짐 ㅜㅜ (로그인 안되있으면 )
-router.post('/:pid/replies', function (req, res, next) {
+router.post('/:pid/replies', isLoggedIn, function (req, res, next) {
   var userId = req.user.id;  //오 있으면 안터짐
 // 겟커넥션  댓글 쓰기(닉넴=세션(패포)ㄱㄱ)올..ㅋ   끝???
 
@@ -1390,7 +1390,7 @@ router.post('/:pid/replies', function (req, res, next) {
 
 });
 // 12. 매칭/스토리 댓글수정    //req.user.id 없으면 터짐 ㅜㅜ (로그인 안되있으면 )
-router.put('/:pid/replies/:rid', function (req, res, next) {
+router.put('/:pid/replies/:rid', isLoggedIn, function (req, res, next) {
   var userId = req.user.id;  //오 있으면 안터짐
   function getConnecton(callback) {
     pool.getConnection(function (err, connection) {
@@ -1462,7 +1462,7 @@ router.put('/:pid/replies/:rid', function (req, res, next) {
 });
 // 13. 매칭/스토리 댓글삭제      //pid 는 게시글 지울때에 필요할수도! (같이삭제??)
 //req.user.id 없으면 터짐 ㅜㅜ (로그인 안되있으면 )
-router.delete('/:pid/replies/:rid', function (req, res, next) {
+router.delete('/:pid/replies/:rid', isLoggedIn, function (req, res, next) {
 //겟커 작성자 id 확인후!? 지움 끝?
   var userId = req.user.id;  //오 있으면 안터짐
   function getConnecton(callback) {
