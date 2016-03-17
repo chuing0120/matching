@@ -1230,7 +1230,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
         case 'nick':    //닉//내용/
           sql = "SELECT p.id as 'pid',  content, nickname " +
             ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-            ", limit_people, decide_people, u.id as 'mid' " +
+            ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
             "FROM matchdb.post p join matchdb.user u on(u.id = p.user_id) " +
 //            "                     join matchdb.file f on(p.id = f.post_id)" +
             "WHERE nickname like " +
@@ -1252,7 +1252,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
         case 'content':
           sql = "SELECT p.id as 'pid', content, nickname " +
             ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-            ", limit_people, decide_people, u.id as 'mid' " +
+            ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
             "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
 //            "                     join matchdb.file f on(p.id = f.post_id)" +
             "WHERE content like " +
@@ -1265,7 +1265,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
     } else {
       sql = "SELECT p.id as 'pid', content, nickname " +
         ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-        ", limit_people, decide_people, u.id as 'mid' " +
+        ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
         "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
 //        "join matchdb.file f on(p.id = f.post_id)" +
         "LIMIT ? OFFSET ? ";// +
@@ -1274,7 +1274,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
     if (flag === 'people') {
       sql = "SELECT p.id as 'pid', content, nickname " +
         ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-        ", limit_people, decide_people, u.id as 'mid' " +
+        ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
         "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
 //        "                     join matchdb.file f on(p.id = f.post_id)" +
         "WHERE limit_people IS NOT NULL " +
