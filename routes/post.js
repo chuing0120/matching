@@ -1341,7 +1341,7 @@ router.get('/', function (req, res, next) {
 
 // 11. 매칭/스토리 댓글쓰기    //req.user.id 없으면 터짐 ㅜㅜ (로그인 안되있으면 )
 router.post('/:pid/replies', function (req, res, next) {
-
+  var userId = req.user.id;  //오 있으면 안터짐
 // 겟커넥션  댓글 쓰기(닉넴=세션(패포)ㄱㄱ)올..ㅋ   끝???
 
   function getConnecton(callback) {
@@ -1391,7 +1391,7 @@ router.post('/:pid/replies', function (req, res, next) {
 });
 // 12. 매칭/스토리 댓글수정    //req.user.id 없으면 터짐 ㅜㅜ (로그인 안되있으면 )
 router.put('/:pid/replies/:rid', function (req, res, next) {
-
+  var userId = req.user.id;  //오 있으면 안터짐
   function getConnecton(callback) {
     pool.getConnection(function (err, connection) {
       if (err) {
@@ -1464,6 +1464,7 @@ router.put('/:pid/replies/:rid', function (req, res, next) {
 //req.user.id 없으면 터짐 ㅜㅜ (로그인 안되있으면 )
 router.delete('/:pid/replies/:rid', function (req, res, next) {
 //겟커 작성자 id 확인후!? 지움 끝?
+  var userId = req.user.id;  //오 있으면 안터짐
   function getConnecton(callback) {
     pool.getConnection(function (err, connection) {
       if (err) {
