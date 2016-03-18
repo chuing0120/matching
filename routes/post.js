@@ -110,7 +110,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
           console.log('인터11',interest);
           cb1();
         });
-      };
+      }
 
       function each2(cb2) {
         var i = 0;
@@ -136,24 +136,10 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
     }
 
-    function selectMember(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-      var sql = "SELECT nickname, genre, position, photo_path " +
-        "FROM matchdb.user " +
-        "WHERE id = ?";
-      connection.query(sql, [user.id], function (err, results) {
-        if (err) {
-          connection.release();
-          callback(err);
-        } else {    //어디서 봤던 코드..?
-          callback(null, connection, results);
-        }
-      });
-    }
-
-    function insertPost(connection, results, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-      var sql = "insert into matchdb.post (user_id, title, content) " +
-        "    values ( ?, ?, ?)";        //1=user.id
-      connection.query(sql, [user.id, user.title, user.content], function (err, results) {
+    function insertPost(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+      var sql = "insert into matchdb.post (user_id, content) " +
+        "    values ( ?, ?)";        //1=user.id
+      connection.query(sql, [user.id, user.content], function (err, results) {
         connection.release();
         if (err) {
           callback(err);
@@ -163,7 +149,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
       });
     }
 
-    function insertPostInterest(connection, results, callback) {
+    function insertPostInterest(connection, callback) {
       connection.beginTransaction(function (err) {  //오 롤백된듯? 엥 아닌가??
         if (err) {
           connection.release();
@@ -171,9 +157,9 @@ router.post('/', isLoggedIn, function (req, res, next) {
         } else {
 
           function insertMatch(callback) {
-            var sql = "INSERT into matchdb.post (user_id, title, content, limit_people, decide_people) " +
-              "VALUES ( ?, ?, ?, ?, ?)";
-            connection.query(sql, [user.id, user.title, user.content,
+            var sql = "INSERT into matchdb.post (user_id, content, limit_people, decide_people) " +
+              "VALUES ( ?, ?, ?, ?)";
+            connection.query(sql, [user.id, user.content,
               user.limit, user.decide], function (err, result) {
               if (err) {
                 connection.rollback();
@@ -233,8 +219,11 @@ router.post('/', isLoggedIn, function (req, res, next) {
     // 리밋보다 디사가 클경우...........
 
     if (user.limit === undefined) { //됨
-      async.waterfall([getConnection, selectMember, insertPost], function (err, result) {
+      async.waterfall([getConnection, insertPost], function (err, result) {
         if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+          var err = {
+            "message": "body로 글 작성이 실패했습니다."
+          };
           next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
         } else {    //동적 프로퍼티 생성?!?!
           var result = {
@@ -247,7 +236,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
         }
       });
     } else {
-      async.waterfall([getConnection, selectMember, insertPostInterest], function (err, result) {
+      async.waterfall([getConnection, insertPostInterest], function (err, result) {
         if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
           next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
         } else {    //동적 프로퍼티 생성?!?!
@@ -407,9 +396,9 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   var insertPostId;
 
                   function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-                    var sql = "insert into matchdb.post (user_id, title, content)" +
-                      "values ( ?, ?, ?)";        //1=user.id
-                    connection.query(sql, [user.id, user.title, user.content], function (err, result) {
+                    var sql = "insert into matchdb.post (user_id, content)" +
+                      "values ( ?, ?)";        //1=user.id
+                    connection.query(sql, [user.id, user.content], function (err, result) {
                       if (err) {
                         connection.rollback();
                         connection.release();
@@ -484,9 +473,9 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
                   var insertPostId;
                   function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-                    var sql = "insert into matchdb.post (user_id, title, content)" +
-                      "values ( ?, ?, ?)";        //1=user.id
-                    connection.query(sql, [user.id, user.title, user.content], function (err, result) {
+                    var sql = "insert into matchdb.post (user_id, content)" +
+                      "values ( ?, ?)";        //1=user.id
+                    connection.query(sql, [user.id, user.content], function (err, result) {
                       if (err) {
                         connection.rollback();
                         connection.release();
@@ -526,7 +515,6 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   var interest = [];
                   function parseGenrePosition(callback) {
                     var i = 0;
-                    console.log('유저',user);
                     function each1(cb1) {
                       async.eachSeries(user.genre, function (item, cb) {
                         interest.push([item]);
@@ -608,7 +596,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                 if (err) {
                   deleteS3Links();
                   var err = {
-                    "message": "글 작성 실패"
+                    "message": "form-data로 글 작성이 실패했습니다."
                   };
                   next(err);
                 } else {
@@ -624,6 +612,9 @@ router.post('/', isLoggedIn, function (req, res, next) {
               async.waterfall([getConnection, transPostLinksInterests], function (err, result) {
                 if (err) {
                   deleteS3Links();
+                  var err = {
+                    "message": "form-data로 글 작성이 실패했습니다."
+                  };
                   next(err);
                 } else {
                   var result = {
@@ -655,9 +646,9 @@ router.post('/', isLoggedIn, function (req, res, next) {
         }
 
         function insertPost(connection, results, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-          var sql = "insert into matchdb.post (user_id, title, content) " +
-            "    values ( ?, ?, ?)";        //1=user.id
-          connection.query(sql, [user.id, user.title, user.content], function (err, results) {
+          var sql = "insert into matchdb.post (user_id, content) " +
+            "    values ( ?, ?)";        //1=user.id
+          connection.query(sql, [user.id, user.content], function (err, results) {
             connection.release();
             if (err) {
               callback(err);
@@ -675,9 +666,9 @@ router.post('/', isLoggedIn, function (req, res, next) {
             } else {
 
               function insertMatch(callback) {
-                var sql = "INSERT into matchdb.post (user_id, title, content, limit_people, decide_people) " +
-                  "VALUES ( ?, ?, ?, ?, ?)";
-                connection.query(sql, [user.id, user.title, user.content,
+                var sql = "INSERT into matchdb.post (user_id, content, limit_people, decide_people) " +
+                  "VALUES ( ?, ?, ?, ?)";
+                connection.query(sql, [user.id, user.content,
                   user.limit, user.decide], function (err, result) {
                   if (err) {
                     connection.rollback();
@@ -696,7 +687,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                 //왜 널이여..
                 var sql = "insert into matchdb.interest (post_id, genre, position) " +
                   "    values ( ?, ?, ?)";
-                console.log('인터',interest);
+
                 async.each(interest, function (item, callback) {
                   connection.query(sql, [insertId, item[0], item[1]], function (err, results) {
                     if (err) {
@@ -739,7 +730,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
             } else {    //동적 프로퍼티 생성?!?!
               var result = {
                 "success": {
-                  "message": "body로 게시글이 작성되었습니다.",
+                  "message": "form-data로 사진없이 게시글이 작성되었습니다.",
                   //"userInput": user
                 }
               };
@@ -753,7 +744,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
             } else {    //동적 프로퍼티 생성?!?!
               var result = {
                 "success": {
-                  "message": "body로 매칭게시글이 작성되었습니다.",
+                  "message": "form-data로 사진없이 매칭게시글이 작성되었습니다.",
                   //"userInput": user
                 }
               };
@@ -789,7 +780,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
               } else {
                 console.log(data);
                 fs.unlink(files['photo'].path, function () {
-                  console.log(files['photo'].path + " 파일이 삭제되었습니다...");
+
                 });
                 resultURL = data.Location;
                 callback(null);
@@ -806,9 +797,9 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
               var insertPostId;
               function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-                var sql = "insert into matchdb.post (user_id, title, content)" +
-                  "values ( ?, ?, ?)";        //1=user.id
-                connection.query(sql, [user.id, user.title, user.content], function (err, result) {
+                var sql = "insert into matchdb.post (user_id, content)" +
+                  "values ( ?, ?)";        //1=user.id
+                connection.query(sql, [user.id, user.content], function (err, result) {
                   if (err) {
                     connection.rollback();
                     connection.release();
@@ -860,9 +851,9 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
               var insertPostId;
               function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-                var sql = "insert into matchdb.post (user_id, title, content)" +
-                  "values ( ?, ?, ?)";        //1=user.id
-                connection.query(sql, [user.id, user.title, user.content], function (err, result) {
+                var sql = "insert into matchdb.post (user_id, content)" +
+                  "values ( ?, ?)";        //1=user.id
+                connection.query(sql, [user.id, user.content], function (err, result) {
                   if (err) {
                     connection.rollback();
                     connection.release();
@@ -994,7 +985,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
             if (err) {
               deleteS3Link();
               var err = {
-                "message": "글 작성 실패"
+                "message": "form-data로 글 작성이 실패했습니다."
               };
               next(err);
             } else {
@@ -1010,13 +1001,16 @@ router.post('/', isLoggedIn, function (req, res, next) {
           async.waterfall([UploadServer, getConnection, transPostLinkInterests], function (err, result) {
             if (err) {
               deleteS3Link();
+              var err = {
+                "message": "form-data로 글 작성이 실패했습니다."
+              };
               next(err);
             } else {
               var result = {
                 "success": {
                   "message": "파일 업로드 매칭 완료"
                 }
-              }
+              };
               res.json(result);
             }
           });
@@ -1218,9 +1212,11 @@ router.get('/', isLoggedIn, function (req, res, next) {
   }
 
   function selectPost(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-                                                // 페이지 안들어왔을때 처리 안한듯..ㅜ
     var pageNum = req.query.page ;
-    //if (pageNum)
+    pageNum = -1;
+    console.log('페이지',pageNum);
+    if (pageNum === undefined || pageNum === null || pageNum === NaN || pageNum <= 0) pageNum = 1;
+    console.log('페이지',pageNum);
     var limit = 10;
     var offset = limit * (pageNum - 1);
     var sql;
