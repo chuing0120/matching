@@ -16,7 +16,6 @@ function isLoggedIn(req, res, next) {
 	if (!req.isAuthenticated()) {
 		var err = new Error();
 		err.message = "로그인이 필요합니다.";
-		//err.status = 401;
 		next(err);
 	} else {
 		next();
@@ -54,7 +53,6 @@ router.post('/', function (req, res, next) {
 						connection.release();
 						var err = new Error();
 						err.message = '사용자가 이미 존재하고 있습니다.';
-						//err.status = 409;
 						callback(err);
 					} else {
 						callback(null, connection);
@@ -76,7 +74,6 @@ router.post('/', function (req, res, next) {
 						connection.release();
 						var err = new Error();
 						err.message = '닉네임이 이미 존재하고 있습니다.';
-						//err.status = 409;
 						callback(err);
 					} else {
 						callback(null, connection);
@@ -131,14 +128,12 @@ router.post('/', function (req, res, next) {
 						"message": "가입이 정상적으로 처리되었습니다."
 					}
 				};
-				//Logger.log('warn', result[0], '/members');
 				res.json(data);
 			}
 		});
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		//err.status = 426;
 		next(err);
 	}
 });
@@ -172,14 +167,12 @@ router.get('/me', isLoggedIn, function (req, res, next) {
 						"data": result[0]
 					}
 				};
-				//Logger.log('warn', result[0], '/members/me');
 				res.json(data);
 			}
 		});
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		//err.status = 426;
 		next(err);
 	}
 });
@@ -215,14 +208,12 @@ router.get('/:mid', isLoggedIn, function (req, res, next) {
 						"data": result[0]
 					}
 				};
-				//Logger.log('warn', result[0], 'members/:mid');
 				res.json(data);
 			}
 		});
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		//err.status = 426;
 		next(err);
 	}
 });
@@ -326,6 +317,7 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 			async.waterfall([getConnection, SelectUsername, SelectNickname, generateSalt,
 				generateHashPassword, UpdateMember], function (err, result) {
 				if (err) {
+					Logger.log('warn', err, 'PUT/members/me');
 					next(err);
 				} else {
 					var data = {
@@ -339,13 +331,14 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 
 		} else {
 			// [content-type]의 form-data으로 body에 photo = xxx.jpg 업로드
+
 			var form = new formidable.IncomingForm(); // 파일 업로드 (formidable)
 			form.uploadDir = path.join(__dirname, '../uploads'); //uploads 폴더경로로
 			form.keepExtensions = true; // 파일 확장자 남긴다에 true
 			form.maxFieldsSize = 5 * 1024 * 1024; // 5MB 용량 제한 , 아무리 사진 하나가 5MB을 넘을리가..
 
 			form.parse(req, function (err, fields, files) { // 폼을 파싱하는거같은데 보류
-
+				var results = [];
 				var mimeType = mime.lookup(path.basename(files['photo'].path)); //mime타입 대상은 photo네임
 				var s3 = new AWS.S3({ //s3 config정보 로딩
 					"accessKeyId": s3Config.key,
@@ -434,6 +427,7 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 				async.waterfall([UploadServer, getConnection, deleteS3Photo, updatePhoto],
 					function (err, result) {
 					if (err) {
+						Logger.log('warn', err, 'PUT/members/me');
 						next(err);
 					} else {
 						var data = {
@@ -441,7 +435,6 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 								"message": "프로필 사진이 업로드 되었습니다."
 							}
 						};
-						Logger.log('warn', result, 'members/me');
 						res.json(data);
 					}
 				});
@@ -450,7 +443,6 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		//err.status = 426;
 		next(err);
 	}
 });
