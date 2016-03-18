@@ -110,7 +110,7 @@ router.post('/', function (req, res, next) {
 			var sql = "INSERT INTO matchdb.user (username, nickname, password, photo_path) " +
 				"VALUES (?, ?, ?, ?)";
 			connection.query(sql, [username, nickname, hashPassword,
-					"https://s3.ap-northeast-2.amazonaws.com/chuing/test/upload_d4e6dcbdfeaeecd0dc00839b61848a1b.png"],
+					"https://s3.ap-northeast-2.amazonaws.com/chuing/test/circle_profile/circle_profile.png"],
 				function (err, result) { // 위에 있는 링크는 프로필 기본 디폴트 사진
 					connection.release();
 					if (err) {
@@ -227,7 +227,7 @@ router.get('/:mid', isLoggedIn, function (req, res, next) {
 	}
 });
 // 5. 내 프로필 수정 (HTTPS)
-router.put('/me', isLoggedIn, function (req, res, next) {
+router.put('/me', function (req, res, next) {
 	if (req.secure) {
 		var userId = req.user.id;
 		var username = req.body.username;
