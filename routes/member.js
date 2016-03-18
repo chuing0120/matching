@@ -16,7 +16,7 @@ function isLoggedIn(req, res, next) {
 	if (!req.isAuthenticated()) {
 		var err = new Error();
 		err.message = "로그인이 필요합니다.";
-		err.status = 401;
+		//err.status = 401;
 		next(err);
 	} else {
 		next();
@@ -54,7 +54,7 @@ router.post('/', function (req, res, next) {
 						connection.release();
 						var err = new Error();
 						err.message = '사용자가 이미 존재하고 있습니다.';
-						err.status = 409;
+						//err.status = 409;
 						callback(err);
 					} else {
 						callback(null, connection);
@@ -76,7 +76,7 @@ router.post('/', function (req, res, next) {
 						connection.release();
 						var err = new Error();
 						err.message = '닉네임이 이미 존재하고 있습니다.';
-						err.status = 409;
+						//err.status = 409;
 						callback(err);
 					} else {
 						callback(null, connection);
@@ -110,7 +110,7 @@ router.post('/', function (req, res, next) {
 			var sql = "INSERT INTO matchdb.user (username, nickname, password, photo_path) " +
 				"VALUES (?, ?, ?, ?)";
 			connection.query(sql, [username, nickname, hashPassword,
-					"https://s3.ap-northeast-2.amazonaws.com/chuing/test/upload_d4e6dcbdfeaeecd0dc00839b61848a1b.png"],
+					"https://s3.ap-northeast-2.amazonaws.com/chuing/test/circle_profile/circle_profile.png"],
 				function (err, result) { // 위에 있는 링크는 프로필 기본 디폴트 사진
 					connection.release();
 					if (err) {
@@ -131,14 +131,14 @@ router.post('/', function (req, res, next) {
 						"message": "가입이 정상적으로 처리되었습니다."
 					}
 				};
-				Logger.log('warn', result[0], '/members');
+				//Logger.log('warn', result[0], '/members');
 				res.json(data);
 			}
 		});
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		err.status = 426;
+		//err.status = 426;
 		next(err);
 	}
 });
@@ -172,14 +172,14 @@ router.get('/me', isLoggedIn, function (req, res, next) {
 						"data": result[0]
 					}
 				};
-				Logger.log('warn', result[0], '/members/me');
+				//Logger.log('warn', result[0], '/members/me');
 				res.json(data);
 			}
 		});
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		err.status = 426;
+		//err.status = 426;
 		next(err);
 	}
 });
@@ -215,14 +215,14 @@ router.get('/:mid', isLoggedIn, function (req, res, next) {
 						"data": result[0]
 					}
 				};
-				Logger.log('warn', result[0], 'members/:mid');
+				//Logger.log('warn', result[0], 'members/:mid');
 				res.json(data);
 			}
 		});
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		err.status = 426;
+		//err.status = 426;
 		next(err);
 	}
 });
@@ -252,7 +252,6 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 							if (req.user.id !== results[0].id) { // 기존 아이디 중복검사
 								var err = new Error();
 								err.message = '아이디가 이미 존재하고 있습니다.';
-								err.status = 409;
 								callback(err);
 							} else { //엘스로 안했더니 아래가 실행되면서 넘어가서 수정 진행됨 --;;  엘스 필수..........
 								callback(null, connection);  //  릴리즈???????
@@ -277,10 +276,9 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 							if (req.user.id !== results[0].id) { // 기존 닉네임 중복검사
 								var err = new Error();
 								err.message = '닉네임이 이미 존재하고 있습니다.';
-								err.status = 409;
 								callback(err);
-							} else { //엘스로 안했더니 아래가 실행되면서 넘어가서 수정 진행됨 --;;  엘스 필수..........
-								callback(null, connection);  //  릴리즈???????
+							} else {
+								callback(null, connection);
 							}
 						} else {
 							callback(null, connection);
@@ -314,7 +312,6 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 				var sql = "UPDATE user " +
 					"SET username=?, password=? , nickname=?, intro=?, genre=?, position=? " +
 					"WHERE id = ?";
-
 				connection.query(sql, [username, hashPassword, nickname, intro, genre, position, userId],
 					function (err, results) {
 						connection.release();
@@ -334,21 +331,20 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 					var data = {
 						"success": {
 							"message": "회원 프로필 수정이 정상적으로 처리되었습니다."
-							//"data": result[0]
 						}
 					};
-					Logger.log('warn', result[0], 'members/me');
 					res.json(data);
 				}
 			});
+
 		} else {
+			// [content-type]의 form-data으로 body에 photo = xxx.jpg 업로드
 			var form = new formidable.IncomingForm(); // 파일 업로드 (formidable)
 			form.uploadDir = path.join(__dirname, '../uploads'); //uploads 폴더경로로
 			form.keepExtensions = true; // 파일 확장자 남긴다에 true
 			form.maxFieldsSize = 5 * 1024 * 1024; // 5MB 용량 제한 , 아무리 사진 하나가 5MB을 넘을리가..
 
 			form.parse(req, function (err, fields, files) { // 폼을 파싱하는거같은데 보류
-				var results = [];
 
 				var mimeType = mime.lookup(path.basename(files['photo'].path)); //mime타입 대상은 photo네임
 				var s3 = new AWS.S3({ //s3 config정보 로딩
@@ -364,6 +360,7 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 				});
 
 				function UploadServer(callback) { // s3로 파일 업로드
+
 					var body = fs.createReadStream(files['photo'].path);
 					s3.upload({"Body": body}) //서버로 업로드
 						.on('httpUploadProgress', function (event) {
@@ -374,7 +371,7 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 								callback(err);
 							} else {
 								fs.unlink(files['photo'].path, function () { // unlink(파일삭제) uploads에 기록이 안남음
-									//uploads에 올라간 파일 삭데되었음..
+									//uploads에 올라간 파일 삭제되었음..
 								});
 								results.push(data.Location); //data.Location에서 s3 올라간 파일경로 나옴
 								callback(null);
@@ -444,7 +441,7 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 								"message": "프로필 사진이 업로드 되었습니다."
 							}
 						};
-						Logger.log('warn', result[0], 'members/me');
+						Logger.log('warn', result, 'members/me');
 						res.json(data);
 					}
 				});
@@ -453,10 +450,11 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		err.status = 426;
+		//err.status = 426;
 		next(err);
 	}
 });
+
 // 18. 내 트랙 상세목록 보기 (HTTPS)
 router.get('/me/tracks', function (req, res, next) {
 	if (req.secure) {
@@ -505,7 +503,7 @@ router.get('/me/tracks', function (req, res, next) {
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		err.status = 426;
+		//err.status = 426;
 		next(err);
 	}
 });
@@ -559,7 +557,7 @@ router.get('/:mid/tracks', function (req, res, next) {
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		err.status = 426;
+		//err.status = 426;
 		next(err);
 	}
 });
