@@ -107,7 +107,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
           if (err) {
             callback(err);
           }
-          console.log('인터11',interest);
+          console.log('인터11', interest);
           cb1();
         });
       }
@@ -218,12 +218,13 @@ router.post('/', isLoggedIn, function (req, res, next) {
     // 숫자가 아닐경우........ NaN!!!??
     // 리밋보다 디사가 클경우...........
 
-    if (user.limit === undefined) { //됨
+    if (user.limit === undefined || user.limit === 0) { //됨
       async.waterfall([getConnection, insertPost], function (err, result) {
         if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
           var err = {
-            "message": "body로 글 작성이 실패했습니다."
+            "message": "body로 게시글 작성이 실패했습니다."
           };
+          Logger.log('warn', '/posts (POST)', err);
           next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
         } else {    //동적 프로퍼티 생성?!?!
           var result = {
@@ -232,12 +233,17 @@ router.post('/', isLoggedIn, function (req, res, next) {
               //"userInput": user
             }
           };
+          Logger.log('info', '/posts (POST)', result);
           res.json(result);        //더미!!!!응답!!!!!!
         }
       });
     } else {
       async.waterfall([getConnection, insertPostInterest], function (err, result) {
-        if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+        if (err) {
+          var err = {
+            "message": "body로 매칭글 작성이 실패했습니다."
+          };
+          Logger.log('warn', '/posts (POST)', err);
           next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
         } else {    //동적 프로퍼티 생성?!?!
           var result = {
@@ -246,6 +252,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
               //"userInput": user
             }
           };
+          Logger.log('info', '/posts (POST)', result);
           res.json(result);        //더미!!!!응답!!!!!!
         }
       });
@@ -301,7 +308,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
               callback(err);
             }
-            console.log('인터1',interest);
+            console.log('인터1', interest);
             cb1();
           });
         };
@@ -310,13 +317,13 @@ router.post('/', isLoggedIn, function (req, res, next) {
           var i = 0;
           async.eachSeries(user.position, function (item, cb) {
             interest[i++].push(item);
-            console.log('인터2',interest);
+            console.log('인터2', interest);
             cb();
           }, function (err) {
             if (err) {
               callback(err);
             }
-            console.log('인터22',interest);
+            console.log('인터22', interest);
             cb2();
           });
         }
@@ -372,6 +379,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
               if (err) {
                 var err = new Error();
                 err.message = "업로드s에 실패하셨습니다."
+                Logger.log('warn', '/posts (POST)', err);
                 cb(err);
               } else {
                 fs.unlink(file.path, function () {
@@ -472,6 +480,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                 } else {
 
                   var insertPostId;
+
                   function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
                     var sql = "insert into matchdb.post (user_id, content)" +
                       "values ( ?, ?)";        //1=user.id
@@ -513,8 +522,10 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   }
 
                   var interest = [];
+
                   function parseGenrePosition(callback) {
                     var i = 0;
+
                     function each1(cb1) {
                       async.eachSeries(user.genre, function (item, cb) {
                         interest.push([item]);
@@ -577,7 +588,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
                   }
 
-                  async.series([insertPost, insertNewLinks, parseGenrePosition,insertInterests], function (err) {
+                  async.series([insertPost, insertNewLinks, parseGenrePosition, insertInterests], function (err) {
                     if (err) {
                       callback(err);  //already release
                     } else {
@@ -591,20 +602,22 @@ router.post('/', isLoggedIn, function (req, res, next) {
             }
 
 
-            if (user.limit === undefined) { //됨
+            if (user.limit === undefined || user.limit === 0) { //됨
               async.waterfall([getConnection, transPostLinks], function (err, result) {
                 if (err) {
                   deleteS3Links();
                   var err = {
-                    "message": "form-data로 글 작성이 실패했습니다."
+                    "message": "파일 업로드s 게시글 작성이 실패했습니다."
                   };
+                  Logger.log('warn', '/posts (POST)', err);
                   next(err);
                 } else {
                   var result = {
                     "success": {
                       "message": "파일 업로드s 게시 완료"
                     }
-                  }
+                  };
+                  Logger.log('info', '/posts (POST)', result);
                   res.json(result);
                 }
               });
@@ -613,15 +626,17 @@ router.post('/', isLoggedIn, function (req, res, next) {
                 if (err) {
                   deleteS3Links();
                   var err = {
-                    "message": "form-data로 글 작성이 실패했습니다."
+                    "message": "파일 업로드s 매칭글 작성이 실패했습니다."
                   };
+                  Logger.log('warn', '/posts (POST)', err);
                   next(err);
                 } else {
                   var result = {
                     "success": {
                       "message": "파일 업로드s 매칭 완료"
                     }
-                  }
+                  };
+                  Logger.log('info', '/posts (POST)', result);
                   res.json(result);
                 }
               });
@@ -631,19 +646,6 @@ router.post('/', isLoggedIn, function (req, res, next) {
       } else if (!files['photo']) { // 사진을 올리지 않은 경우
 
         //전역으로 주면 없다고 에러남 ㅜㅜ
-        function selectMember(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-          var sql = "SELECT nickname, genre, position, photo_path " +
-            "FROM matchdb.user " +
-            "WHERE id = ?";
-          connection.query(sql, [user.id], function (err, results) {
-            if (err) {
-              connection.release();
-              callback(err);
-            } else {    //어디서 봤던 코드..?
-              callback(null, connection, results);
-            }
-          });
-        }
 
         function insertPost(connection, results, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
           var sql = "insert into matchdb.post (user_id, content) " +
@@ -723,9 +725,10 @@ router.post('/', isLoggedIn, function (req, res, next) {
           })
         }
 
-        if (user.limit === undefined) { //됨
-          async.waterfall([getConnection, selectMember, insertPost], function (err, result) {
+        if (user.limit === undefined || user.limit === 0) { //됨
+          async.waterfall([getConnection, insertPost], function (err, result) {
             if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+
               next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
             } else {    //동적 프로퍼티 생성?!?!
               var result = {
@@ -734,11 +737,12 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   //"userInput": user
                 }
               };
+              Logger.log('info', '/posts (POST)', result);
               res.json(result);        //더미!!!!응답!!!!!!
             }
           });
         } else {
-          async.waterfall([getConnection, selectMember, insertPostInterest], function (err, result) {
+          async.waterfall([getConnection, insertPostInterest], function (err, result) {
             if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
               next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
             } else {    //동적 프로퍼티 생성?!?!
@@ -767,6 +771,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
         });
 
         var resultURL;
+
         function UploadServer(callback) {
           var body = fs.createReadStream(files['photo'].path);
           s3.upload({"Body": body})
@@ -796,6 +801,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
             } else {
 
               var insertPostId;
+
               function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
                 var sql = "insert into matchdb.post (user_id, content)" +
                   "values ( ?, ?)";        //1=user.id
@@ -850,6 +856,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
             } else {
 
               var insertPostId;
+
               function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
                 var sql = "insert into matchdb.post (user_id, content)" +
                   "values ( ?, ?)";        //1=user.id
@@ -860,7 +867,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                     callback(err);
                   } else {    //어디서 봤던 코드..?
                     insertPostId = result.insertId;
-                    console.log('인서트아디',insertId);
+                    console.log('인서트아디', insertId);
                     callback(null);
                   }
                 });
@@ -884,9 +891,10 @@ router.post('/', isLoggedIn, function (req, res, next) {
               }
 
               var interest = [];
+
               function parseGenrePosition(callback) {
                 var i = 0;
-                console.log('유저',user);
+                console.log('유저', user);
                 function each1(cb1) {
                   async.eachSeries(user.genre, function (item, cb) {
                     interest.push([item]);
@@ -949,7 +957,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
               }
 
-              async.series([insertPost, insertNewLink, parseGenrePosition,insertInterests], function (err) {
+              async.series([insertPost, insertNewLink, parseGenrePosition, insertInterests], function (err) {
                 if (err) {
                   callback(err);  //already release
                 } else {
@@ -962,7 +970,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
         }
 
-        function deleteS3Link(){
+        function deleteS3Link() {
           var s3 = new AWS.S3({
             "accessKeyId": s3Config.key,
             "secretAccessKey": s3Config.secret,
@@ -980,7 +988,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
           });
         }
 
-        if (user.limit === undefined) { //됨
+        if (user.limit === undefined || user.limit === 0) { //됨
           async.waterfall([UploadServer, getConnection, transPostLink], function (err, result) {
             if (err) {
               deleteS3Link();
@@ -1198,8 +1206,12 @@ router.delete('/:pid', isLoggedIn, function (req, res, next) {
 router.get('/', isLoggedIn, function (req, res, next) {
 
   //검색기능 ㅜㅜ   // null 처리
-  var keyword = (req.query.key === null) ? undefined : req.query.key;
-  var flag = (req.query.flag === null) ? undefined : req.query.flag;  //  닉/내용 flag!!!
+  var keyword = req.query.key;
+  var flag = req.query.flag;
+
+  keyword = (keyword === null || keyword === undefined) ? undefined : keyword;
+  flag = (flag === null || flag === undefined) ? undefined : flag;
+
 
   function getConnecton(callback) {
     pool.getConnection(function (err, connection) {
@@ -1212,69 +1224,61 @@ router.get('/', isLoggedIn, function (req, res, next) {
   }
 
   function selectPost(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-    var pageNum = req.query.page ;
-    pageNum = -1;
-    console.log('페이지',pageNum);
+    var pageNum = req.query.page;
     if (pageNum === undefined || pageNum === null || pageNum === NaN || pageNum <= 0) pageNum = 1;
-    console.log('페이지',pageNum);
     var limit = 10;
     var offset = limit * (pageNum - 1);
     var sql;
 
-    if (keyword !== undefined) {
-      switch (flag) {
-        case 'nick':    //닉//내용/
-          sql = "SELECT p.id as 'pid',  content, nickname " +
-            ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-            ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
-            "       ,genre, position " +
-            "FROM matchdb.post p join matchdb.user u on(u.id = p.user_id) " +
-            "WHERE nickname like " +
-            connection.escape('%' + keyword + '%') + " " +
-            "LIMIT ? OFFSET ? ";// +
-          break;
+    // keyword = 검색 o/x   flag = 매칭/ 게시글 선택  후!!  o/x  = 4가지???
 
-        //case 'title':
-        //  sql = "SELECT p.id, title, content, nickname " +
-        //    ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-        //    ", limit_people, decide_people, path as photo " +
-        //    "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-        //    "                     join matchdb.file f on(p.id = f.post_id)" +
-        //    "WHERE title like ? " +
-        //    connection.escape(keyword) + " " +
-        //    "LIMIT ? OFFSET ? ";// +
-        //  break;
 
-        case 'content':
-          sql = "SELECT p.id as 'pid', content, nickname " +
-            ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-            ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
-            "       ,genre, position " +
-            "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-            "WHERE content like " +
-            connection.escape('%' + keyword + '%') + " " +
-            "LIMIT ? OFFSET ? ";// +
-          break;
-        default:
-          break;
+    if (flag === 'people') {    // 매칭글!!
+      if (keyword === undefined) {  // 매칭    (& 키워드 X)
+        sql = "SELECT p.id as 'pid', content, nickname " +
+          ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
+          ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
+          "       ,genre, position " +
+          "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
+          "WHERE limit_people IS NOT NULL " +
+          "ORDER BY date desc " +
+          "LIMIT ? OFFSET ?";
+      } else {  // 매칭 & 키워드 O
+        sql = "SELECT id, content, nickname, date " +
+          "       , limit_people, decide_people " +
+          "       , genre, position " +
+          "FROM  (SELECT p.id, p.content, nickname " +
+          "             , date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
+          "             , limit_people, decide_people, genre, position " +
+          "       FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
+          "       WHERE limit_people IS NOT NULL ) matching " +
+          "WHERE content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " +
+          "ORDER BY date desc";
+
       }
-    } else {
-      sql = "SELECT p.id as 'pid', content, nickname " +
-        ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-        ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
-        "       ,genre, position " +
-        "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-        "LIMIT ? OFFSET ? ";// +
-    }
+    } else {  //flag !== people!!   = 전체 !!!  게시글
+      if (keyword === undefined) {
+        sql = "SELECT p.id as 'pid', content, nickname " +
+          ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
+          ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
+          "       ,genre, position " +
+          "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
+          "ORDER BY date desc " +
+          "LIMIT ? OFFSET ?";
+      } else { /// 전체!! & 키워드 O
+        sql = "SELECT id, content, nickname, date " +
+          "       , limit_people, decide_people " +
+          "       , genre, position " +
+          "FROM  (SELECT p.id, p.content, nickname " +
+          "             , date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
+          "             , limit_people, decide_people, genre, position " +
+          "       FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) ) total " +
+          "WHERE content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " +
+          "ORDER BY date desc";
 
-    if (flag === 'people') {
-      sql = "SELECT p.id as 'pid', content, nickname " +
-        ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-        ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
-        "       ,genre, position " +
-        "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-        "WHERE limit_people IS NOT NULL " +
-        "LIMIT ? OFFSET ?";
+      }
+
+
     }
 
     connection.query(sql, [limit, offset], function (err, results) {
@@ -1287,15 +1291,14 @@ router.get('/', isLoggedIn, function (req, res, next) {
     });
   }
 
-  // selectFiles ㄱㄱ
-//  var photos = [];
-  function selectFile(connection, results, callback) {
+
+  function selectFiles(connection, results, callback) {
     var sql = "SELECT path " +
       "FROM matchdb.file " +
       "WHERE post_id = ? ";
-    var i=0;
+    var i = 0;
     async.each(results, function (item, cb) {
-      connection.query(sql, [item.pid], function(err, result){
+      connection.query(sql, [item.pid], function (err, result) {
         if (err) {
           cb(err);
         } else {
@@ -1329,12 +1332,14 @@ router.get('/', isLoggedIn, function (req, res, next) {
 
   }
 
-  async.waterfall([getConnecton, selectPost, selectFile], function (err, results) {
+  async.waterfall([getConnecton, selectPost, selectFiles], function (err, results) {
     if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
-
-      next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
-    } else {    //동적 프로퍼티 생성?!?!
-//      results.photo = photos;
+      var err = {
+        "message": "게시글이 목록조회를 실패 헀습니다."
+      }
+      Logger.log('debug', '/posts (POST)', err);
+      next(err);
+    } else {
       var result = {
         "success": {
           "message": "게시글이 목록조회되었습니다.",
@@ -1343,6 +1348,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
           "data": results
         }
       };
+      Logger.log('info', '/posts (POST)' + result);
       res.json(result);        //더미!!!!응답!!!!!!
     }
   });
@@ -1368,7 +1374,7 @@ router.post('/:pid/replies', isLoggedIn, function (req, res, next) {
     });
   }
 
-  function selectReply(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+  function insertReply(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
 
     var sql = "INSERT into matchdb.comment (content, post_id, user_id) " +
       "VALUES (?, ?, ?)";
@@ -1383,13 +1389,13 @@ router.post('/:pid/replies', isLoggedIn, function (req, res, next) {
     });
   }
 
-  async.waterfall([getConnecton, selectReply], function (err, results) {
+  async.waterfall([getConnecton, insertReply], function (err, results) {
     if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
       next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
     } else {    //동적 프로퍼티 생성?!?!
       var result = {
         "success": {
-          "message": "댓이 작성되었습니다.",
+          "message": "댓글이 작성되었습니다.",
           "results": {
             "content": req.body.content,
             "pid": req.params.pid,
@@ -1580,7 +1586,6 @@ router.get('/:pid/replies', function (req, res, next) {
       }
     });
   }
-
 
 
   async.waterfall([getConnecton, selectReply], function (err, results) {
