@@ -131,6 +131,7 @@ router.post('/', function (req, res, next) {
 						"message": "가입이 정상적으로 처리되었습니다."
 					}
 				};
+				Logger.log('warn', result[0], '/members');
 				res.json(data);
 			}
 		});
@@ -171,7 +172,7 @@ router.get('/me', isLoggedIn, function (req, res, next) {
 						"data": result[0]
 					}
 				};
-				Logger.log('debug', result, 'sss');
+				Logger.log('warn', result[0], '/members/me');
 				res.json(data);
 			}
 		});
@@ -214,6 +215,7 @@ router.get('/:mid', isLoggedIn, function (req, res, next) {
 						"data": result[0]
 					}
 				};
+				Logger.log('warn', result[0], 'members/:mid');
 				res.json(data);
 			}
 		});
@@ -331,10 +333,11 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 				} else {
 					var data = {
 						"success": {
-							"message": "회원 프로필 수정이 정상적으로 처리되었습니다.",
-							"data": result
+							"message": "회원 프로필 수정이 정상적으로 처리되었습니다."
+							//"data": result[0]
 						}
 					};
+					Logger.log('warn', result[0], 'members/me');
 					res.json(data);
 				}
 			});
@@ -431,7 +434,8 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 				}
 
 				// 삭제후 업로드!!   선삭제 이후 업로드   왜냐면 삭제 에러시 못올리게하려고!!
-				async.waterfall([UploadServer, getConnection, deleteS3Photo, updatePhoto], function (err, result) {
+				async.waterfall([UploadServer, getConnection, deleteS3Photo, updatePhoto],
+					function (err, result) {
 					if (err) {
 						next(err);
 					} else {
@@ -440,6 +444,7 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 								"message": "프로필 사진이 업로드 되었습니다."
 							}
 						};
+						Logger.log('warn', result[0], 'members/me');
 						res.json(data);
 					}
 				});
@@ -494,6 +499,7 @@ router.get('/me/tracks', function (req, res, next) {
 					}
 				};
 			}
+			Logger.log('warn', results, 'members/me/tracks');
 			res.json(data)
 		});
 	} else {
@@ -547,6 +553,7 @@ router.get('/:mid/tracks', function (req, res, next) {
 					}
 				};
 			}
+			Logger.log('warn', results, 'members/:mid/tracks');
 			res.json(data)
 		});
 	} else {
