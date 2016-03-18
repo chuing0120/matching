@@ -72,9 +72,9 @@ router.get('/', function (req, res, next) {
 
 	function insertPost(connection, callback) {
 		async.eachSeries(sheet, function (item, callback) {
-			var sql = "INSERT INTO matchdb.post (title, content, limit_people, decide_people, user_id) " +
-				"VALUES(?, ?, ?, ?, ?)"
-			connection.query(sql, [item.title, item.content, item.limit_people,
+			var sql = "INSERT INTO matchdb.post (content, limit_people, decide_people, user_id) " +
+				"VALUES(?, ?, ?, ?)"
+			connection.query(sql, [item.content, item.limit_people,
 					item.decide_people, item.user_id],
 				function (err, result) {
 					if (err) {
