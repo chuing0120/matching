@@ -32,7 +32,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
       }
     });
   }
-
+/*
   function insertNewLinks(connection, callback) {
     var insertResults = [];//new link id
     var sql = "INSERT INTO matchdb.file (post_id, path) " +
@@ -53,7 +53,8 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
           s3.deleteObject(params, function (err, data) {
             if (err) {
-              console.log(err, err.stack);//실패시 로깅...
+              //console.log(err, err.stack);//실패시 로깅...
+              Logger.log('debug', '/posts (POST)', err);
             }
           });
           callback(err);
@@ -73,7 +74,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
     });
 
   }
-
+*/
   var insertId;
   var interest = [];  // + parseInt() !!!
   var userId = req.user.id;
@@ -107,7 +108,6 @@ router.post('/', isLoggedIn, function (req, res, next) {
           if (err) {
             callback(err);
           }
-          console.log('인터11', interest);
           cb1();
         });
       }
@@ -264,8 +264,36 @@ router.post('/', isLoggedIn, function (req, res, next) {
     form.uploadDir = path.join(__dirname, '../uploads');
     form.keepExtensions = true;
     form.multiples = true;
-    form.maxFieldsSize = 10 * 1024 * 1024;      // 10MB !!
+    form.maxFieldsSize = 30 * 1024 * 1024;      // 30MB !!
+
+    var formFields = {};
+    form.on('field', function(name, value) {
+      function makeFormFields(prop, val) {
+        if (!formFields[prop]) {
+          formFields[prop] = val;
+        } else {
+          if (formFields[prop] instanceof Array) { // 배열일 경우
+            formFields[prop].push(val);
+          } else { // 배열이 아닐 경우
+            var tmp = formFields[prop];
+            formFields[prop] = [];
+            formFields[prop].push(tmp);
+            formFields[prop].push(val);
+          }
+        }//
+      }
+      var re1 = /\[\]/;
+      var re2 = /\[\d+\]/;
+      if (name.match(re1)) {
+        name = name.replace(re1, '');
+      } else if (name.match(/\[\d+\]/)) {
+        name = name.replace(re2, '');
+      }
+      makeFormFields(name, value);
+    });
+
     form.parse(req, function (err, fields, files) {
+//      console.log('필즈2',formFields);
       var results = [];
 
       function deleteS3Links() {
@@ -282,7 +310,8 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
           s3.deleteObject(params, function (err, data) {
             if (err) {
-              console.log(err, err.stack);//실패시 로깅...
+              //console.log(err, err.stack);//실패시 로깅...
+              Logger.log('debug', '/posts (POST)', results);
             }
           });
         }, function (err) {
@@ -308,7 +337,6 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
               callback(err);
             }
-            console.log('인터1', interest);
             cb1();
           });
         };
@@ -317,13 +345,11 @@ router.post('/', isLoggedIn, function (req, res, next) {
           var i = 0;
           async.eachSeries(user.position, function (item, cb) {
             interest[i++].push(item);
-            console.log('인터2', interest);
             cb();
           }, function (err) {
             if (err) {
               callback(err);
             }
-            console.log('인터22', interest);
             cb2();
           });
         }
@@ -345,8 +371,8 @@ router.post('/', isLoggedIn, function (req, res, next) {
         "content": fields.content,
         "limit": fields.limit,  //  언디파인이면 게시글
         "decide": fields.decide, //  값 존재 = 매칭!!
-        "genre": fields.genre,  // 장르 받아옴
-        "position": fields.position // 포지션받아옴
+        "genre": formFields.genre,  // 장르 받아옴
+        "position": formFields.position // 포지션받아옴
       };
 
       if (typeof user.genre === 'string') {
@@ -373,7 +399,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
           var body = fs.createReadStream(file.path);
           s3.upload({"Body": body})
             .on('httpUploadProgress', function (event) {
-              console.log(event);
+              //console.log(event);
             })
             .send(function (err, data) {
               if (err) {
@@ -438,7 +464,8 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
                           s3.deleteObject(params, function (err, data) {
                             if (err) {
-                              console.log(err, err.stack);//실패시 로깅...
+                              //console.log(err, err.stack);//실패시 로깅...
+                              Logger.log('debug', '/posts (POST)', err);
                             }
                           });
                           callback(err);
@@ -482,9 +509,9 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   var insertPostId;
 
                   function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-                    var sql = "insert into matchdb.post (user_id, content)" +
-                      "values ( ?, ?)";        //1=user.id
-                    connection.query(sql, [user.id, user.content], function (err, result) {
+                    var sql = "insert into matchdb.post (user_id, content, limit_people, decide_people)" +
+                      "values (?, ?, ?, ?)";        //1=user.id
+                    connection.query(sql, [user.id, user.content, user.limit, user.decide], function (err, result) {
                       if (err) {
                         connection.rollback();
                         connection.release();
@@ -529,11 +556,13 @@ router.post('/', isLoggedIn, function (req, res, next) {
                     function each1(cb1) {
                       async.eachSeries(user.genre, function (item, cb) {
                         interest.push([item]);
+                        console.log('인터11', interest);
                         cb(null);
                       }, function (err) {
                         if (err) {
                           callback(err);
                         }
+                        console.log('인터12', interest);
                         cb1(null);
                       });
                     }
@@ -542,11 +571,13 @@ router.post('/', isLoggedIn, function (req, res, next) {
                       var i = 0;
                       async.eachSeries(user.position, function (item, cb) {
                         interest[i++].push(item);
+                        console.log('인터21', interest);
                         cb(null);
                       }, function (err) {
                         if (err) {
                           callback(err);
                         }
+                        console.log('인터22', interest);
                         cb2(null);
                       });
                     }
@@ -555,7 +586,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                       if (err) {
                         callback(err);
                       } else {
-
+                        console.log('인터!', interest);
                         callback(null);
                       }
                     });
@@ -566,8 +597,11 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
                     var sql = "insert into matchdb.interest (post_id, genre, position) " +
                       "    values ( ?, ?, ?)";
+                    //async.each(interest, function (item, callback) {
+                    //  connection.query(sql, [insertPostId, item[0], item[1]], function (err, results) {
                     async.each(interest, function (item, callback) {
                       connection.query(sql, [insertPostId, item[0], item[1]], function (err, results) {
+
                         if (err) {
                           connection.rollback();
                           connection.release();
@@ -647,7 +681,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
         //전역으로 주면 없다고 에러남 ㅜㅜ
 
-        function insertPost(connection, results, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
+        function insertPost(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
           var sql = "insert into matchdb.post (user_id, content) " +
             "    values ( ?, ?)";        //1=user.id
           connection.query(sql, [user.id, user.content], function (err, results) {
@@ -660,7 +694,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
           });
         }
 
-        function insertPostInterest(connection, results, callback) {
+        function insertPostInterest(connection, callback) {
           connection.beginTransaction(function (err) {  //오 롤백된듯? 엥 아닌가??
             if (err) {
               connection.release();
@@ -728,7 +762,10 @@ router.post('/', isLoggedIn, function (req, res, next) {
         if (user.limit === undefined || user.limit === 0) { //됨
           async.waterfall([getConnection, insertPost], function (err, result) {
             if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
-
+              var err = {
+                "message": "form-data로 사진없이 게시글 작성 실패"
+              };
+              Logger.log('debug', err, '/posts (POST)');
               next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
             } else {    //동적 프로퍼티 생성?!?!
               var result = {
@@ -744,6 +781,10 @@ router.post('/', isLoggedIn, function (req, res, next) {
         } else {
           async.waterfall([getConnection, insertPostInterest], function (err, result) {
             if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+              var err = {
+                "message": "form-data로 사진없이 매칭글 작성 실패"
+              };
+              Logger.log('debug', err, '/posts (POST)');
               next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
             } else {    //동적 프로퍼티 생성?!?!
               var result = {
@@ -752,6 +793,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   //"userInput": user
                 }
               };
+              Logger.log('info', result, '/posts (POST)');
               res.json(result);        //더미!!!!응답!!!!!!
             }
           });
@@ -776,14 +818,12 @@ router.post('/', isLoggedIn, function (req, res, next) {
           var body = fs.createReadStream(files['photo'].path);
           s3.upload({"Body": body})
             .on('httpUploadProgress', function (event) {
-              console.log(event);
+              //console.log(event);
             })
             .send(function (err, data) {
               if (err) {
-                console.log(err);
                 callback(err);
               } else {
-                console.log(data);
                 fs.unlink(files['photo'].path, function () {
 
                 });
@@ -858,16 +898,15 @@ router.post('/', isLoggedIn, function (req, res, next) {
               var insertPostId;
 
               function insertPost(callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-                var sql = "insert into matchdb.post (user_id, content)" +
-                  "values ( ?, ?)";        //1=user.id
-                connection.query(sql, [user.id, user.content], function (err, result) {
+                var sql = "insert into matchdb.post (user_id, content, limit_people, decide_people)" +
+                  "values (?, ?, ?, ?)";        //1=user.id
+                connection.query(sql, [user.id, user.content, user.limit, user.decide], function (err, result) {
                   if (err) {
                     connection.rollback();
                     connection.release();
                     callback(err);
                   } else {    //어디서 봤던 코드..?
                     insertPostId = result.insertId;
-                    console.log('인서트아디', insertId);
                     callback(null);
                   }
                 });
@@ -894,7 +933,6 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
               function parseGenrePosition(callback) {
                 var i = 0;
-                console.log('유저', user);
                 function each1(cb1) {
                   async.eachSeries(user.genre, function (item, cb) {
                     interest.push([item]);
@@ -983,7 +1021,8 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
           s3.deleteObject(params, function (err, data) {
             if (err) {
-              console.log(err, err.stack);//실패시 로깅...
+              //console.log(err, err.stack);//실패시 로깅...
+              Logger.log('debug', '/posts (POST)', err);
             }
           });
         }
@@ -1210,7 +1249,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
   var flag = req.query.flag;
 
   keyword = (keyword === null || keyword === undefined) ? undefined : keyword;
-  flag = (flag === null || flag === undefined) ? undefined : flag;
+  flag = (flag === null || flag === undefined ) ? undefined : flag;
 
 
   function getConnecton(callback) {
@@ -1232,9 +1271,8 @@ router.get('/', isLoggedIn, function (req, res, next) {
 
     // keyword = 검색 o/x   flag = 매칭/ 게시글 선택  후!!  o/x  = 4가지???
 
-
     if (flag === 'people') {    // 매칭글!!
-      if (keyword === undefined) {  // 매칭    (& 키워드 X)
+      if (keyword === undefined || keyword === null || keyword === "") {  // 매칭    (& 키워드 X)
         sql = "SELECT p.id as 'pid', content, nickname " +
           ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
@@ -1246,18 +1284,17 @@ router.get('/', isLoggedIn, function (req, res, next) {
       } else {  // 매칭 & 키워드 O
         sql = "SELECT id, content, nickname, date " +
           "       , limit_people, decide_people " +
-          "       , genre, position " +
+          "       , genre, position, profile " +
           "FROM  (SELECT p.id, p.content, nickname " +
           "             , date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-          "             , limit_people, decide_people, genre, position " +
+          "             , limit_people, decide_people, genre, position, photo_path as 'profile' " +
           "       FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
           "       WHERE limit_people IS NOT NULL ) matching " +
           "WHERE content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " +
           "ORDER BY date desc";
-
       }
     } else {  //flag !== people!!   = 전체 !!!  게시글
-      if (keyword === undefined) {
+      if (keyword === undefined || keyword === null || keyword === "") {
         sql = "SELECT p.id as 'pid', content, nickname " +
           ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
@@ -1268,17 +1305,15 @@ router.get('/', isLoggedIn, function (req, res, next) {
       } else { /// 전체!! & 키워드 O
         sql = "SELECT id, content, nickname, date " +
           "       , limit_people, decide_people " +
-          "       , genre, position " +
+          "       , genre, position, profile " +
           "FROM  (SELECT p.id, p.content, nickname " +
           "             , date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-          "             , limit_people, decide_people, genre, position " +
+          "             , limit_people, decide_people, genre, position, photo_path as 'profile' " +
           "       FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) ) total " +
           "WHERE content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " +
           "ORDER BY date desc";
 
       }
-
-
     }
 
     connection.query(sql, [limit, offset], function (err, results) {
@@ -1335,7 +1370,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
   async.waterfall([getConnecton, selectPost, selectFiles], function (err, results) {
     if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
       var err = {
-        "message": "게시글이 목록조회를 실패 헀습니다."
+        "message": "게시글이 목록조회를 실패 했습니다."
       }
       Logger.log('debug', '/posts (POST)', err);
       next(err);
