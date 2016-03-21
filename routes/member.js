@@ -53,6 +53,7 @@ router.post('/', function (req, res, next) {
 						connection.release();
 						var err = new Error();
 						err.message = '사용자가 이미 존재하고 있습니다.';
+						Logger.log('warn',err,'GET/members');
 						callback(err);
 					} else {
 						callback(null, connection);
@@ -74,6 +75,7 @@ router.post('/', function (req, res, next) {
 						connection.release();
 						var err = new Error();
 						err.message = '닉네임이 이미 존재하고 있습니다.';
+						Logger.log('warn',err,'GET/members');
 						callback(err);
 					} else {
 						callback(null, connection);
@@ -150,6 +152,7 @@ router.get('/me', isLoggedIn, function (req, res, next) {
 			connection.query(sql, [userId], function (err, results) {
 				connection.release();
 				if (err) {
+					Logger.log('warn',err,'GET/members/me');
 					callback(err)
 				} else {
 					callback(null, results);
@@ -200,6 +203,7 @@ router.get('/:mid', isLoggedIn, function (req, res, next) {
 
 		async.waterfall([getConnection, selectMember], function (err, result) {
 			if (err) {
+				Logger.log('warn',err,'GET/members/:mid');
 				next(err);
 			} else {
 				var data = {
@@ -243,6 +247,7 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 							if (req.user.id !== results[0].id) { // 기존 아이디 중복검사
 								var err = new Error();
 								err.message = '아이디가 이미 존재하고 있습니다.';
+								Logger.log('warn',err,'PUT/member/me');
 								callback(err);
 							} else { //엘스로 안했더니 아래가 실행되면서 넘어가서 수정 진행됨 --;;  엘스 필수..........
 								callback(null, connection);  //  릴리즈???????
@@ -267,6 +272,7 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 							if (req.user.id !== results[0].id) { // 기존 닉네임 중복검사
 								var err = new Error();
 								err.message = '닉네임이 이미 존재하고 있습니다.';
+								Logger.log('warn',err,'PUT/member/me');
 								callback(err);
 							} else {
 								callback(null, connection);
@@ -317,7 +323,6 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 			async.waterfall([getConnection, SelectUsername, SelectNickname, generateSalt,
 				generateHashPassword, UpdateMember], function (err, result) {
 				if (err) {
-					Logger.log('warn', err, 'PUT/members/me');
 					next(err);
 				} else {
 					var data = {
@@ -339,105 +344,115 @@ router.put('/me', isLoggedIn, function (req, res, next) {
 
 			form.parse(req, function (err, fields, files) { // 폼을 파싱하는거같은데 보류
 				var results = [];
-				var mimeType = mime.lookup(path.basename(files['photo'].path)); //mime타입 대상은 photo네임
-				var s3 = new AWS.S3({ //s3 config정보 로딩
-					"accessKeyId": s3Config.key,
-					"secretAccessKey": s3Config.secret,
-					"region": s3Config.region,
-					"params": {
-						"Bucket": s3Config.bucket,
-						"Key": s3Config.imageDir + "/" + path.basename(files['photo'].path), // 목적지의 이름
-						"ACL": s3Config.imageACL,
-						"ContentType": mimeType //mime.lookup
+				if(files['photo'] === undefined ) {
+					var data = {
+						"fail" : {
+							"message" : "선택된 파일이 없습니다..."
+						}
+					};
+					res.json(data)
+					Logger.log('debug', data, 'PUT/members/me .. 파일선택x');
+				} else {
+					var mimeType = mime.lookup(path.basename(files['photo'].path)); //mime타입 대상은 photo네임
+					var s3 = new AWS.S3({ //s3 config정보 로딩
+						"accessKeyId": s3Config.key,
+						"secretAccessKey": s3Config.secret,
+						"region": s3Config.region,
+						"params": {
+							"Bucket": s3Config.bucket,
+							"Key": s3Config.imageDir + "/" + path.basename(files['photo'].path), // 목적지의 이름
+							"ACL": s3Config.imageACL,
+							"ContentType": mimeType //mime.lookup
+						}
+					});
+
+					function UploadServer(callback) { // s3로 파일 업로드
+
+						var body = fs.createReadStream(files['photo'].path);
+						s3.upload({"Body": body}) //서버로 업로드
+							.on('httpUploadProgress', function (event) {
+								// event : loaded, part, key:jpg파일경로
+							})
+							.send(function (err, data) { // 파일 전송
+								if (err) {
+									callback(err);
+								} else {
+									fs.unlink(files['photo'].path, function () { // unlink(파일삭제) uploads에 기록이 안남음
+										//uploads에 올라간 파일 삭제되었음..
+									});
+									results.push(data.Location); //data.Location에서 s3 올라간 파일경로 나옴
+									callback(null);
+								}
+							});
 					}
-				});
 
-				function UploadServer(callback) { // s3로 파일 업로드
+					function deleteS3Photo(connection, callback) { // s3에 있는 파일 지워보장
+						var userId = req.user.id;
 
-					var body = fs.createReadStream(files['photo'].path);
-					s3.upload({"Body": body}) //서버로 업로드
-						.on('httpUploadProgress', function (event) {
-							// event : loaded, part, key:jpg파일경로
+						var sql = "SELECT photo_path " +
+							"FROM matchdb.user " +
+							"WHERE id = ?";
+						connection.query(sql, [userId], function (err, results) {
+							if (err) {
+								connection.release();
+								callback(err);
+							} else if (results.length === 0) {
+								// 파일 존재 하지 않을때
+								callback(null, connection);
+							} else {
+								//path.basename(results[0].photo_path : upload_xxx.png 파일나옴
+								var s3 = new AWS.S3({
+									"accessKeyId": s3Config.key,
+									"secretAccessKey": s3Config.secret,
+									"region": s3Config.region
+								});
+								var params = {
+									"Bucket": s3Config.bucket,
+									"Key": s3Config.imageDir + "/" + path.basename(results[0].photo_path)
+								};
+								s3.deleteObject(params, function (err, data) { //s3올라간 파일 지움
+									if (err) {
+										connection.release();
+										callback(err);
+									} else {
+										callback(null, connection);
+									}
+								});
+							}
 						})
-						.send(function (err, data) { // 파일 전송
+					}
+
+					function updatePhoto(connection, callback) { //db에 있는 기존데이터를 s3통한 링크로 업데이트
+						var sql = "UPDATE matchdb.user " +
+							"SET photo_path= ? " +
+							"WHERE id = ?";
+						connection.query(sql, [results[0], userId], function (err, result) {
+							// 현재 results[0] 값은 : s3에 올라간 파일경로나옴 data.Location값하고 일치
+							connection.release();
 							if (err) {
 								callback(err);
 							} else {
-								fs.unlink(files['photo'].path, function () { // unlink(파일삭제) uploads에 기록이 안남음
-									//uploads에 올라간 파일 삭제되었음..
-								});
-								results.push(data.Location); //data.Location에서 s3 올라간 파일경로 나옴
-								callback(null);
+								callback(null, {"id": result.id});
+							}
+						})
+					}
+
+					// 삭제후 업로드!!   선삭제 이후 업로드   왜냐면 삭제 에러시 못올리게하려고!!
+					async.waterfall([UploadServer, getConnection, deleteS3Photo, updatePhoto],
+						function (err, result) {
+							if (err) {
+								Logger.log('info', err, 'PUT/members/me이 실패시 에러');
+								next(err);
+							} else {
+								var data = {
+									"success": {
+										"message": "프로필 사진이 업로드 되었습니다."
+									}
+								};
+								res.json(data);
 							}
 						});
 				}
-
-				function deleteS3Photo(connection, callback) { // s3에 있는 파일 지워보장
-					var userId = req.user.id;
-
-					var sql = "SELECT photo_path " +
-						"FROM matchdb.user " +
-						"WHERE id = ?";
-					connection.query(sql, [userId], function (err, results) {
-						if (err) {
-							connection.release();
-							callback(err);
-						} else if (results.length === 0) {
-							// 파일 존재 하지 않을때
-							callback(null, connection);
-						} else {
-							//path.basename(results[0].photo_path : upload_xxx.png 파일나옴
-							var s3 = new AWS.S3({
-								"accessKeyId": s3Config.key,
-								"secretAccessKey": s3Config.secret,
-								"region": s3Config.region
-							});
-							var params = {
-								"Bucket": s3Config.bucket,
-								"Key": s3Config.imageDir + "/" + path.basename(results[0].photo_path)
-							};
-							s3.deleteObject(params, function (err, data) { //s3올라간 파일 지움
-								if (err) {
-									connection.release();
-									callback(err);
-								} else {
-									callback(null, connection);
-								}
-							});
-						}
-					})
-				}
-
-				function updatePhoto(connection, callback) { //db에 있는 기존데이터를 s3통한 링크로 업데이트
-					var sql = "UPDATE matchdb.user " +
-						"SET photo_path= ? " +
-						"WHERE id = ?";
-					connection.query(sql, [results[0], userId], function (err, result) {
-						// 현재 results[0] 값은 : s3에 올라간 파일경로나옴 data.Location값하고 일치
-						connection.release();
-						if (err) {
-							callback(err);
-						} else {
-							callback(null, {"id": result.id});
-						}
-					})
-				}
-
-				// 삭제후 업로드!!   선삭제 이후 업로드   왜냐면 삭제 에러시 못올리게하려고!!
-				async.waterfall([UploadServer, getConnection, deleteS3Photo, updatePhoto],
-					function (err, result) {
-					if (err) {
-						Logger.log('warn', err, 'PUT/members/me');
-						next(err);
-					} else {
-						var data = {
-							"success": {
-								"message": "프로필 사진이 업로드 되었습니다."
-							}
-						};
-						res.json(data);
-					}
-				});
 			});
 		}
 	} else {
@@ -495,7 +510,6 @@ router.get('/me/tracks', function (req, res, next) {
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		//err.status = 426;
 		next(err);
 	}
 });
@@ -549,7 +563,6 @@ router.get('/:mid/tracks', function (req, res, next) {
 	} else {
 		var err = new Error();
 		err.message = "SSL/TLS Upgrade Required";
-		//err.status = 426;
 		next(err);
 	}
 });
