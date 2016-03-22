@@ -1273,17 +1273,16 @@ router.get('/', isLoggedIn, function (req, res, next) {
 
     if (flag === 'people') {    // 매칭글!!
       if (keyword === undefined || keyword === null || keyword === "") {  // 매칭    (& 키워드 X)
+        var id = "";
+        if ( !(mid === undefined || mid ===null || mid === "") ) {
+          id = " and u.id=" + mid + " ";
+        }
         sql = "SELECT p.id as 'pid', content, nickname " +
           ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
           "       ,genre, position " +
           "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-          "WHERE limit_people IS NOT NULL " +
-          "ORDER BY date desc " +
-          "LIMIT ? OFFSET ?";
-        if ( !(mid === undefined || mid ===null || mid === "") ) {
-            sql = sql + " and u.id=" + mid + " ";
-        }
+          "WHERE limit_people IS NOT NULL " + id + " ";
 
       } else {  // 매칭 & 키워드 O
         var id = "";
@@ -1298,12 +1297,9 @@ router.get('/', isLoggedIn, function (req, res, next) {
           "             , limit_people, decide_people, genre, position, photo_path as 'profile', u.id as 'mid' " +
           "       FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
           "       WHERE limit_people IS NOT NULL ) matching " +
-          "WHERE "+id+"content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " +
-          "ORDER BY date desc " +
-          "LIMIT ? OFFSET ?";
-
-
+          "WHERE "+id+"content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " ;
       }
+
     } else if (flag === 'story') {    // 매칭글!!
       if (keyword === undefined || keyword === null || keyword === "") {  // 매칭    (& 키워드 X)
         sql = "SELECT p.id as 'pid', content, nickname " +
@@ -1311,12 +1307,11 @@ router.get('/', isLoggedIn, function (req, res, next) {
           ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
           "       ,genre, position " +
           "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-          "WHERE limit_people IS NULL " +
-          "ORDER BY date desc " +
-          "LIMIT ? OFFSET ?";
+          "WHERE limit_people IS NULL ";
         if ( !(mid === undefined || mid ===null || mid === "") ) {
             sql = sql + " and u.id=" + mid + " ";
         }
+
       } else {  // 매칭 & 키워드 O
         var id = "";
         if ( !(mid === undefined || mid ===null || mid === "") ) {
@@ -1330,9 +1325,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
           "             , limit_people, decide_people, genre, position, photo_path as 'profile' " +
           "       FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
           "       WHERE limit_people IS NULL ) story " +
-          "WHERE "+id+" content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " +
-          "ORDER BY date desc " +
-          "LIMIT ? OFFSET ?";
+          "WHERE "+id+" content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " ;
 
       }
     } else {  //flag !== people& !== story!!   = 전체 !!!  게시글
@@ -1342,12 +1335,11 @@ router.get('/', isLoggedIn, function (req, res, next) {
           ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
           "       ,genre, position " +
           "FROM matchdb.post p   join matchdb.user u on(u.id = p.user_id) " +
-          "WHERE u.id IS NOT NULL " +
-          "ORDER BY date desc " +
-          "LIMIT ? OFFSET ?";
+          "WHERE u.id IS NOT NULL " ;
         if ( !(mid === undefined || mid ===null || mid === "") ) {
             sql = sql + " and u.id=" + mid + " ";
         }
+
       } else { /// 전체!! & 키워드 O
         var id = "";
         if ( !(mid === undefined || mid ===null || mid === "") ) {
@@ -1360,9 +1352,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
           "             , date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           "             , limit_people, decide_people, genre, position, photo_path as 'profile', u.id as 'mid' " +
           "       FROM matchdb.post p  join matchdb.user u on(u.id = p.user_id) ) total " +
-          "WHERE "+id+" content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " +
-          "ORDER BY date desc " +
-          "LIMIT ? OFFSET ?";
+          "WHERE "+id+" content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " ;
       }
     }
 
@@ -1373,6 +1363,9 @@ router.get('/', isLoggedIn, function (req, res, next) {
         cnt = results.length;
       }
     });
+
+    sql = sql + "ORDER BY date desc " +
+                "LIMIT ? OFFSET ?";
 
     connection.query(sql, [limit, offset], function (err, results) {
       connection.release();
