@@ -1241,16 +1241,16 @@ router.delete('/:pid', isLoggedIn, function (req, res, next) {
 // 9. 매칭/스토리 상세보기  =  삭제
 
 
-// 10. 매칭/스토리 목록 보기  + 상세   // 로그인 확인 추가 예정
+// 10. 매칭/스토리 목록 보기  + 상세   // 마이!!!(mid=?) + 스토리(게시글/전체/매칭)
 router.get('/', isLoggedIn, function (req, res, next) {
 
   //검색기능 ㅜㅜ   // null 처리
   var keyword = req.query.key;
   var flag = req.query.flag;
+  var mid = req.query.mid;
 
   keyword = (keyword === null || keyword === undefined) ? undefined : keyword;
   flag = (flag === null || flag === undefined ) ? undefined : flag;
-
 
   function getConnecton(callback) {
     pool.getConnection(function (err, connection) {
@@ -1261,14 +1261,14 @@ router.get('/', isLoggedIn, function (req, res, next) {
       }   // 커넥션 얻어오고 hashPassword 바이패스... null--;;
     });
   }
-
+  var cnt = 0;
   function selectPost(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
     var pageNum = req.query.page;
     if (pageNum === undefined || pageNum === null || pageNum === NaN || pageNum <= 0) pageNum = 1;
     var limit = 10;
     var offset = limit * (pageNum - 1);
     var sql;
-
+    if (mid === undefined || mid === null || mid === NaN || mid <= 0) mid = undefined;
     // keyword = 검색 o/x   flag = 매칭/ 게시글 선택  후!!  o/x  = 4가지???
 
     if (flag === 'people') {    // 매칭글!!
@@ -1278,42 +1278,85 @@ router.get('/', isLoggedIn, function (req, res, next) {
           ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
           "       ,genre, position " +
           "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-          "WHERE limit_people IS NOT NULL " +
-          "ORDER BY date desc " +
-          "LIMIT ? OFFSET ?";
+          "WHERE limit_people IS NOT NULL ";// +
+          //"ORDER BY date desc " +
+          //"LIMIT ? OFFSET ?";
       } else {  // 매칭 & 키워드 O
-        sql = "SELECT id, content, nickname, date " +
+        sql = "SELECT pid, content, nickname, date " +
           "       , limit_people, decide_people " +
-          "       , genre, position, profile " +
-          "FROM  (SELECT p.id, p.content, nickname " +
+          "       , genre, position, profile, mid " +
+          "FROM  (SELECT p.id as 'pid', p.content, nickname " +
           "             , date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
-          "             , limit_people, decide_people, genre, position, photo_path as 'profile' " +
+          "             , limit_people, decide_people, genre, position, photo_path as 'profile', u.id as 'mid' " +
           "       FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
           "       WHERE limit_people IS NOT NULL ) matching " +
-          "WHERE content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " +
-          "ORDER BY date desc";
+          "WHERE content like '%" + keyword + "%' or nickname like '%" + keyword + "%' ";// +
+          //"ORDER BY date desc " +
+          //"LIMIT ? OFFSET ?";
       }
-    } else {  //flag !== people!!   = 전체 !!!  게시글
-      if (keyword === undefined || keyword === null || keyword === "") {
+    } else if (flag === 'story') {    // 매칭글!!
+      if (keyword === undefined || keyword === null || keyword === "") {  // 매칭    (& 키워드 X)
         sql = "SELECT p.id as 'pid', content, nickname " +
           ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
           "       ,genre, position " +
           "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-          "ORDER BY date desc " +
-          "LIMIT ? OFFSET ?";
-      } else { /// 전체!! & 키워드 O
-        sql = "SELECT id, content, nickname, date " +
+          "WHERE limit_people IS NULL ";// +
+          //"ORDER BY date desc " +
+          //"LIMIT ? OFFSET ?";
+      } else {  // 매칭 & 키워드 O
+        sql = "SELECT pid, content, nickname, date " +
           "       , limit_people, decide_people " +
-          "       , genre, position, profile " +
-          "FROM  (SELECT p.id, p.content, nickname " +
+          "       , genre, position, profile, mid " +
+          "FROM  (SELECT p.id as 'pid', p.content, nickname, u.id as 'mid' " +
           "             , date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           "             , limit_people, decide_people, genre, position, photo_path as 'profile' " +
-          "       FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) ) total " +
-          "WHERE content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " +
-          "ORDER BY date desc";
+          "       FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
+          "       WHERE limit_people IS NULL ) story " +
+          "WHERE content like '%" + keyword + "%' or nickname like '%" + keyword + "%' ";// +
+          //"ORDER BY date desc " +
+          //"LIMIT ? OFFSET ?";
+      }
+    } else {  //flag !== people& !== story!!   = 전체 !!!  게시글
+      if (keyword === undefined || keyword === null || keyword === "") {
+        sql = "SELECT p.id as 'pid', content, nickname " +
+          ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
+          ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
+          "       ,genre, position " +
+          "FROM matchdb.post p   join matchdb.user u on(u.id = p.user_id) " +
+          "WHERE u.id IS NOT NULL ";// +
+          //"ORDER BY date desc " +
+          //"LIMIT ? OFFSET ?";
+      } else { /// 전체!! & 키워드 O
+        sql = "SELECT pid, content, nickname, date " +
+          "       , limit_people, decide_people " +
+          "       , genre, position, profile, mid " +
+          "FROM  (SELECT p.id as 'pid', p.content, nickname " +
+          "             , date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
+          "             , limit_people, decide_people, genre, position, photo_path as 'profile', u.id as 'mid' " +
+          "       FROM matchdb.post p  join matchdb.user u on(u.id = p.user_id) ) total " +
+          "WHERE content like '%" + keyword + "%' or nickname like '%" + keyword + "%' ";// +
+          //"ORDER BY date desc " +
+          //"LIMIT ? OFFSET ?";
 
       }
+    }
+
+    connection.query(sql, [], function (err, results) {
+      if (err) {
+        callback(err);
+      } else {    //어디서 봤던 코드..?
+        cnt = results.length;
+      }
+    });
+    console.log('아디',mid);
+    if ( mid === undefined || mid ===null || mid === "") {  //mid X
+      sql = sql + "ORDER BY date desc LIMIT ? OFFSET ?";
+    //} else if (keyword === undefined || keyword === null || keyword === "") {//mid O 키워드 X
+    //  sql = sql + " and u.id="+mid+" ORDER BY date desc LIMIT ? OFFSET ?";
+    } else {  //mid O 키워드 ㅇ
+
+      sql = sql + " and mid="+mid+" ORDER BY date desc LIMIT ? OFFSET ?";
     }
 
     connection.query(sql, [limit, offset], function (err, results) {
@@ -1325,7 +1368,6 @@ router.get('/', isLoggedIn, function (req, res, next) {
       }
     });
   }
-
 
   function selectFiles(connection, results, callback) {
     var sql = "SELECT path " +
@@ -1368,7 +1410,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
   }
 
   async.waterfall([getConnecton, selectPost, selectFiles], function (err, results) {
-    if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+    if (err) {
       var err = {
         "message": "게시글이 목록조회를 실패 했습니다."
       }
@@ -1380,6 +1422,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
           "message": "게시글이 목록조회되었습니다.",
           "page": req.query.page,
           "pageLimit": 10,
+          "count" : cnt,
           "data": results
         }
       };
