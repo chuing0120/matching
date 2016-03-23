@@ -765,7 +765,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
               var err = {
                 "message": "form-data로 사진없이 게시글 작성 실패"
               };
-              Logger.log('debug', err, '/posts (POST)');
+              Logger.log('error', err, '/posts (POST)');
               next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
             } else {    //동적 프로퍼티 생성?!?!
               var result = {
@@ -774,7 +774,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   //"userInput": user
                 }
               };
-              Logger.log('info', '/posts (POST)', result);
+              Logger.log('warn', '/posts (POST)', result);
               res.json(result);        //더미!!!!응답!!!!!!
             }
           });
@@ -784,7 +784,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
               var err = {
                 "message": "form-data로 사진없이 매칭글 작성 실패"
               };
-              Logger.log('debug', err, '/posts (POST)');
+              Logger.log('error', err, '/posts (POST)');
               next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
             } else {    //동적 프로퍼티 생성?!?!
               var result = {
@@ -793,7 +793,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   //"userInput": user
                 }
               };
-              Logger.log('info', result, '/posts (POST)');
+              Logger.log('warn', result, '/posts (POST)');
               res.json(result);        //더미!!!!응답!!!!!!
             }
           });
@@ -1034,13 +1034,15 @@ router.post('/', isLoggedIn, function (req, res, next) {
               var err = {
                 "message": "form-data로 글 작성이 실패했습니다."
               };
+              Logger.log('error','/posts (POST)', err.message);
               next(err);
             } else {
               var result = {
                 "success": {
                   "message": "파일 업로드 게시 완료"
                 }
-              }
+              };
+              Logger.log('warn','/posts (POST)', result.success.message);
               res.json(result);
             }
           });
@@ -1051,6 +1053,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
               var err = {
                 "message": "form-data로 글 작성이 실패했습니다."
               };
+              Logger.log('error','/posts (POST)', err.message);
               next(err);
             } else {
               var result = {
@@ -1058,6 +1061,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   "message": "파일 업로드 매칭 완료"
                 }
               };
+              Logger.log('warn','/posts (POST)', result.success.message);
               res.json(result);
             }
           });
@@ -1077,7 +1081,7 @@ router.put('/:pid', isLoggedIn, function (req, res, next) {
   var user = {
     "id": req.user.id,//req.session.userId,
     "pid": req.params.pid,
-    "title": req.body.title,
+
     "content": req.body.content,
     "photo": req.body.photo,
     "limit_people": req.body.limit_people,
@@ -1105,9 +1109,6 @@ router.put('/:pid', isLoggedIn, function (req, res, next) {
       } else if (user.id === results[0].user_id) {    // 작성자와 삭제할 게시물의 작성자가 같은경우
         callback(null, connection);
       } else {    // 다른 경우 삭제 ㄴㄴ함
-        var err = {
-          "message": "작성자가 아니라서 게시글을 수정할 수 없습니다."
-        };
         callback(err);
       }
     });
@@ -1118,11 +1119,11 @@ router.put('/:pid', isLoggedIn, function (req, res, next) {
     if (user.limit_people !== null) {   //undeifined??
 
       var sql = "update post " +
-        "set title= ?, content= ?, limit_people = ?, decide_people=? " +
+        "set content= ?, limit_people = ?, decide_people=? " +
         "where id = ?";
 
       connection.query(sql, [
-        user.title, user.content, user.limit_people,
+         user.content, user.limit_people,
         user.decide_people, user.pid
       ], function (err, results) {
         connection.release();
@@ -1152,6 +1153,10 @@ router.put('/:pid', isLoggedIn, function (req, res, next) {
 
   async.waterfall([getConnecton, compareUserId, updatePost], function (err, result) {
     if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+      var err = {
+        "message": "작성자가 아니라서 게시글을 수정할 수 없습니다."
+      };
+      Logger.log('err','/posts/:pid (PUT)', err.message);
       next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
     } else {    //동적 프로퍼티 생성?!?!
       var result = {
@@ -1160,6 +1165,7 @@ router.put('/:pid', isLoggedIn, function (req, res, next) {
           "userInput": user
         }
       };
+      Logger.log('err','/posts/:pid (PUT)', result.success.message);
       res.json(result);
     }
   });
@@ -1223,6 +1229,10 @@ router.delete('/:pid', isLoggedIn, function (req, res, next) {
 
   async.waterfall([getConnecton, compareUserId, deletePost], function (err, result) {
     if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+      var err = {
+        "message": "게시글이 삭제 실패되었습니다."
+      }
+      Logger.log('err','/posts/:pid (DELETE)', err.message);
       next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
     } else {    //동적 프로퍼티 생성?!?!
       var result = {
@@ -1231,6 +1241,7 @@ router.delete('/:pid', isLoggedIn, function (req, res, next) {
           "userInput": user
         }
       };
+      Logger.log('warn','/posts/:pid (DELETE)', result.success.message);
       res.json(result);        //더미!!!!응답!!!!!!
     }
   });
@@ -1448,7 +1459,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
       var err = {
         "message": "게시글이 목록조회를 실패 했습니다."
       };
-      Logger.log('debug', '/posts (POST)', err);
+      Logger.log('debug', '/posts (POST)', err.message);
       next(err);
     } else {
       var result = {
@@ -1460,7 +1471,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
           "data": results
         }
       };
-      Logger.log('info', '/posts (POST)' + result);
+      Logger.log('info', '/posts (POST)' + result.success.message);
       res.json(result);        //더미!!!!응답!!!!!!
     }
   });
