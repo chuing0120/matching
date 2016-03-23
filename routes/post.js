@@ -1248,9 +1248,17 @@ router.get('/', isLoggedIn, function (req, res, next) {
   var keyword = req.query.key;
   var flag = req.query.flag;
   var mid = req.query.mid;
+  var pid = req.query.pid;
+  var pageNum = req.query.page;
 
   keyword = (keyword === null || keyword === undefined) ? undefined : keyword;
   flag = (flag === null || flag === undefined ) ? undefined : flag;
+  if (mid === undefined || mid === null || mid === NaN || mid <= 0) mid = undefined;
+  if (pid === undefined || pid === null || pid === NaN || pid <= 0) pid = undefined;
+  if (pageNum === undefined || pageNum === null || pageNum === NaN || pageNum <= 0) pageNum = 1;
+
+  var limit = 10;
+  var offset = limit * (pageNum - 1);
 
   function getConnecton(callback) {
     pool.getConnection(function (err, connection) {
@@ -1263,12 +1271,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
   }
   var cnt = 0;
   function selectPost(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
-    var pageNum = req.query.page;
-    if (pageNum === undefined || pageNum === null || pageNum === NaN || pageNum <= 0) pageNum = 1;
-    var limit = 10;
-    var offset = limit * (pageNum - 1);
     var sql;
-    if (mid === undefined || mid === null || mid === NaN || mid <= 0) mid = undefined;
     // keyword = 검색 o/x   flag = 매칭/ 게시글 선택  후!!  o/x  = 4가지???
 
     if (flag === 'people') {    // 매칭글!!
@@ -1277,17 +1280,25 @@ router.get('/', isLoggedIn, function (req, res, next) {
         if ( !(mid === undefined || mid ===null || mid === "") ) {
           id = " and u.id=" + mid + " ";
         }
+        var id2 = "";
+        if ( !(pid === undefined || pid ===null || pid === "") ) {
+          id2 = " and p.id=" + pid + " ";
+        }
         sql = "SELECT p.id as 'pid', content, nickname " +
           ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
           "       ,genre, position " +
           "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-          "WHERE limit_people IS NOT NULL " + id + " ";
+          "WHERE limit_people IS NOT NULL " + id + id2 + " ";
 
       } else {  // 매칭 & 키워드 O
         var id = "";
         if ( !(mid === undefined || mid ===null || mid === "") ) {
           id = " mid=" + mid + " and ";  //조건이 맨앞으로 가야함 ㅜㅜ
+        }
+        var id2 = "";
+        if ( !(pid === undefined || pid ===null || pid === "") ) {
+          id2 = " p.id=" + pid + " and ";
         }
         sql = "SELECT pid, content, nickname, date " +
           "       , limit_people, decide_people " +
@@ -1296,18 +1307,22 @@ router.get('/', isLoggedIn, function (req, res, next) {
           "             , date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           "             , limit_people, decide_people, genre, position, photo_path as 'profile', u.id as 'mid' " +
           "       FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-          "       WHERE limit_people IS NOT NULL ) matching " +
-          "WHERE "+id+"content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " ;
+          "       WHERE "+id2+" limit_people IS NOT NULL ) matching " +
+          "WHERE "+id+" content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " ;
       }
 
     } else if (flag === 'story') {    // 매칭글!!
       if (keyword === undefined || keyword === null || keyword === "") {  // 매칭    (& 키워드 X)
+        var id2 = "";
+        if ( !(pid === undefined || pid ===null || pid === "") ) {
+          id2 = " p.id=" + pid + " and ";
+        }
         sql = "SELECT p.id as 'pid', content, nickname " +
           ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
           "       ,genre, position " +
           "FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-          "WHERE limit_people IS NULL ";
+          "WHERE "+id2+" limit_people IS NULL ";
         if ( !(mid === undefined || mid ===null || mid === "") ) {
             sql = sql + " and u.id=" + mid + " ";
         }
@@ -1317,6 +1332,10 @@ router.get('/', isLoggedIn, function (req, res, next) {
         if ( !(mid === undefined || mid ===null || mid === "") ) {
           id = " mid=" + mid + " and ";  //조건이 맨앞으로 가야함 ㅜㅜ
         }
+        var id2 = "";
+        if ( !(pid === undefined || pid ===null || pid === "") ) {
+          id2 = " p.id=" + pid + " and ";
+        }
         sql = "SELECT pid, content, nickname, date " +
           "       , limit_people, decide_people " +
           "       , genre, position, profile, mid " +
@@ -1324,18 +1343,20 @@ router.get('/', isLoggedIn, function (req, res, next) {
           "             , date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           "             , limit_people, decide_people, genre, position, photo_path as 'profile' " +
           "       FROM matchdb.post p	join matchdb.user u on(u.id = p.user_id) " +
-          "       WHERE limit_people IS NULL ) story " +
+          "       WHERE "+id2+" limit_people IS NULL ) story " +
           "WHERE "+id+" content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " ;
-
       }
     } else {  //flag !== people& !== story!!   = 전체 !!!  게시글
       if (keyword === undefined || keyword === null || keyword === "") {
+        if ( !(pid === undefined || pid ===null || pid === "") ) {
+          id2 = " p.id=" + pid + " and ";
+        }
         sql = "SELECT p.id as 'pid', content, nickname " +
           ", date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
           "       ,genre, position " +
           "FROM matchdb.post p   join matchdb.user u on(u.id = p.user_id) " +
-          "WHERE u.id IS NOT NULL " ;
+          "WHERE "+id2+" u.id IS NOT NULL " ;
         if ( !(mid === undefined || mid ===null || mid === "") ) {
             sql = sql + " and u.id=" + mid + " ";
         }
@@ -1345,13 +1366,17 @@ router.get('/', isLoggedIn, function (req, res, next) {
         if ( !(mid === undefined || mid ===null || mid === "") ) {
           id = " mid=" + mid + " and ";  //조건이 맨앞으로 가야함 ㅜㅜ
         }
+        if ( !(pid === undefined || pid ===null || pid === "") ) {
+          id2 = " p.id=" + pid + " and ";
+        }
         sql = "SELECT pid, content, nickname, date " +
           "       , limit_people, decide_people " +
           "       , genre, position, profile, mid " +
           "FROM  (SELECT p.id as 'pid', p.content, nickname " +
           "             , date_format(CONVERT_TZ(post_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
           "             , limit_people, decide_people, genre, position, photo_path as 'profile', u.id as 'mid' " +
-          "       FROM matchdb.post p  join matchdb.user u on(u.id = p.user_id) ) total " +
+          "       FROM matchdb.post p  join matchdb.user u on(u.id = p.user_id)" +
+          "       WHERE "+id2+" p.id is NOT NULL ) total " +
           "WHERE "+id+" content like '%" + keyword + "%' or nickname like '%" + keyword + "%' " ;
       }
     }
