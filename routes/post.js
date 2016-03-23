@@ -20,7 +20,7 @@ function isLoggedIn(req, res, next) {
   }
 }
 
-// 6. 매칭/스토리 쓰기 (HTTP)     파일 업로드............?? + 구인;;;;;;;;;;
+// 6. 매칭/스토리 쓰기 (HTTP)
 router.post('/', isLoggedIn, function (req, res, next) {
 
   function getConnection(callback) {
@@ -32,49 +32,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
       }
     });
   }
-/*
-  function insertNewLinks(connection, callback) {
-    var insertResults = [];//new link id
-    var sql = "INSERT INTO matchdb.file (post_id, path) " +
-      "VALUES ( 1 , ? )"; //todo go to post... cuz post_id
-    async.each(results, function (item, callback) {
 
-      connection.query(sql, [item.s3URL], function (err, result) {
-        if (err) {
-          var s3 = new AWS.S3({
-            "accessKeyId": s3Config.key,
-            "secretAccessKey": s3Config.secret,
-            "region": s3Config.region
-          });
-          var params = {
-            "Bucket": s3Config.bucket,       // 목적지의 이름
-            "Key": s3Config.imageDir + "/" + path.basename(item.s3URL)
-          };
-
-          s3.deleteObject(params, function (err, data) {
-            if (err) {
-              //console.log(err, err.stack);//실패시 로깅...
-              Logger.log('debug', '/posts (POST)', err);
-            }
-          });
-          callback(err);
-        } else {
-          insertResults.push(result.insertId);  //+callback(null will be need)
-          // need insert id cuz select old data except new link!!
-          callback(null);  //엥 왜됐었지??
-        }
-      });
-    }, function (err) {
-      if (err) {
-        connection.release();
-        callback(err);
-      } else {
-        callback(null, connection, insertResults);
-      }
-    });
-
-  }
-*/
   var insertId;
   var interest = [];  // + parseInt() !!!
   var userId = req.user.id;
@@ -224,7 +182,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
           var err = {
             "message": "body로 게시글 작성이 실패했습니다."
           };
-          Logger.log('warn', '/posts (POST)', err);
+          Logger.log('error', '/posts (POST)', err.message);
           next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
         } else {    //동적 프로퍼티 생성?!?!
           var result = {
@@ -233,7 +191,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
               //"userInput": user
             }
           };
-          Logger.log('info', '/posts (POST)', result);
+          Logger.log('warn', '/posts (POST)', result.success.message);
           res.json(result);        //더미!!!!응답!!!!!!
         }
       });
@@ -243,21 +201,20 @@ router.post('/', isLoggedIn, function (req, res, next) {
           var err = {
             "message": "body로 매칭글 작성이 실패했습니다."
           };
-          Logger.log('warn', '/posts (POST)', err);
+          Logger.log('error', '/posts (POST)', err.message);
           next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
         } else {    //동적 프로퍼티 생성?!?!
           var result = {
             "success": {
-              "message": "body로 매칭게시글이 작성되었습니다.",
+              "message": "body로 매칭게시글이 작성되었습니다."
               //"userInput": user
             }
           };
-          Logger.log('info', '/posts (POST)', result);
+          Logger.log('warn', '/posts (POST)', result.success.message);
           res.json(result);        //더미!!!!응답!!!!!!
         }
       });
     }
-
 
   } else { // 파일을 포함한  때 ('multipart/form-data; boundary=----...')
     var form = new formidable.IncomingForm();
@@ -556,13 +513,11 @@ router.post('/', isLoggedIn, function (req, res, next) {
                     function each1(cb1) {
                       async.eachSeries(user.genre, function (item, cb) {
                         interest.push([item]);
-                        console.log('인터11', interest);
                         cb(null);
                       }, function (err) {
                         if (err) {
                           callback(err);
                         }
-                        console.log('인터12', interest);
                         cb1(null);
                       });
                     }
@@ -571,13 +526,11 @@ router.post('/', isLoggedIn, function (req, res, next) {
                       var i = 0;
                       async.eachSeries(user.position, function (item, cb) {
                         interest[i++].push(item);
-                        console.log('인터21', interest);
                         cb(null);
                       }, function (err) {
                         if (err) {
                           callback(err);
                         }
-                        console.log('인터22', interest);
                         cb2(null);
                       });
                     }
@@ -586,7 +539,6 @@ router.post('/', isLoggedIn, function (req, res, next) {
                       if (err) {
                         callback(err);
                       } else {
-                        console.log('인터!', interest);
                         callback(null);
                       }
                     });
@@ -597,11 +549,8 @@ router.post('/', isLoggedIn, function (req, res, next) {
 
                     var sql = "insert into matchdb.interest (post_id, genre, position) " +
                       "    values ( ?, ?, ?)";
-                    //async.each(interest, function (item, callback) {
-                    //  connection.query(sql, [insertPostId, item[0], item[1]], function (err, results) {
                     async.each(interest, function (item, callback) {
                       connection.query(sql, [insertPostId, item[0], item[1]], function (err, results) {
-
                         if (err) {
                           connection.rollback();
                           connection.release();
@@ -643,7 +592,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   var err = {
                     "message": "파일 업로드s 게시글 작성이 실패했습니다."
                   };
-                  Logger.log('warn', '/posts (POST)', err);
+                  Logger.log('error', '/posts (POST)', err.message);
                   next(err);
                 } else {
                   var result = {
@@ -651,7 +600,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                       "message": "파일 업로드s 게시 완료"
                     }
                   };
-                  Logger.log('info', '/posts (POST)', result);
+                  Logger.log('warn', '/posts (POST)', result.success.message);
                   res.json(result);
                 }
               });
@@ -662,7 +611,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   var err = {
                     "message": "파일 업로드s 매칭글 작성이 실패했습니다."
                   };
-                  Logger.log('warn', '/posts (POST)', err);
+                  Logger.log('error', '/posts (POST)', err.message);
                   next(err);
                 } else {
                   var result = {
@@ -670,7 +619,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                       "message": "파일 업로드s 매칭 완료"
                     }
                   };
-                  Logger.log('info', '/posts (POST)', result);
+                  Logger.log('warn', '/posts (POST)', result.success.message);
                   res.json(result);
                 }
               });
@@ -765,7 +714,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
               var err = {
                 "message": "form-data로 사진없이 게시글 작성 실패"
               };
-              Logger.log('error', err, '/posts (POST)');
+              Logger.log('error', '/posts (POST)', err.message);
               next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
             } else {    //동적 프로퍼티 생성?!?!
               var result = {
@@ -774,7 +723,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   //"userInput": user
                 }
               };
-              Logger.log('warn', '/posts (POST)', result);
+              Logger.log('warn', '/posts (POST)', result.success.message);
               res.json(result);        //더미!!!!응답!!!!!!
             }
           });
@@ -784,7 +733,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
               var err = {
                 "message": "form-data로 사진없이 매칭글 작성 실패"
               };
-              Logger.log('error', err, '/posts (POST)');
+              Logger.log('error', '/posts (POST)', err);
               next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
             } else {    //동적 프로퍼티 생성?!?!
               var result = {
@@ -793,7 +742,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
                   //"userInput": user
                 }
               };
-              Logger.log('warn', result, '/posts (POST)');
+              Logger.log('warn', '/posts (POST)', result.success.message);
               res.json(result);        //더미!!!!응답!!!!!!
             }
           });
@@ -1173,7 +1122,7 @@ router.put('/:pid', isLoggedIn, function (req, res, next) {
 });
 
 
-// 8. 매칭/스토리 삭제     // 연결된 댓글도 삭제;;;;  + 연결된 파일도 삭제;;;;  (셋 널 ㄱㄱ)
+// 8. 매칭/스토리 삭제     // 연결된 댓글도 삭제=null  + 연결된 파일도 삭제=null  (셋 널 ㄱㄱ)
 router.delete('/:pid', isLoggedIn, function (req, res, next) {
 
   var user = {
@@ -1249,7 +1198,7 @@ router.delete('/:pid', isLoggedIn, function (req, res, next) {
 });
 
 
-// 9. 매칭/스토리 상세보기  =  삭제
+// 9. 매칭/스토리 상세보기  =  pid...
 
 
 // 10. 매칭/스토리 목록 보기  + 상세   // 마이!!!(mid=?) + 스토리(게시글/전체/매칭)
@@ -1459,7 +1408,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
       var err = {
         "message": "게시글이 목록조회를 실패 했습니다."
       };
-      Logger.log('debug', '/posts (POST)', err.message);
+      Logger.log('error', '/posts (POST)', err.message);
       next(err);
     } else {
       var result = {
@@ -1471,7 +1420,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
           "data": results
         }
       };
-      Logger.log('info', '/posts (POST)' + result.success.message);
+      Logger.log('warn', '/posts (POST)' + result.success.message);
       res.json(result);        //더미!!!!응답!!!!!!
     }
   });
@@ -1671,8 +1620,8 @@ router.delete('/:pid/replies/:rid', isLoggedIn, function (req, res, next) {
 
 });
 // 14. 매칭/스토리 댓글 더보기
-router.get('/:pid/replies', function (req, res, next) {
-
+router.get('/:pid/replies', isLoggedIn, function (req, res, next) {
+var pid = req.params.pid;
 
   function getConnecton(callback) {
     pool.getConnection(function (err, connection) {
@@ -1690,11 +1639,12 @@ router.get('/:pid/replies', function (req, res, next) {
       "       ,genre, position " +
       "         , date_format(CONVERT_TZ(comm_date, '+00:00', '+9:00'), '%Y-%m-%d %H-%i-%s') as 'date' " +
       "FROM matchdb.comment r	join matchdb.user u on(u.id = r.user_id) " +
-      "ORDER BY r.id " +
-      "LIMIT ? OFFSET ? ";// +
-    //   "WHERE id = ?";
+      "WHERE r.post_id=" + pid + " " +
+      "ORDER BY date desc " +
+      "LIMIT ? OFFSET ? ";
+
     var pageNum = req.query.page;
-    var limit = 3;
+    var limit = 10;
     var offset = limit * (pageNum - 1);
 
     connection.query(sql, [limit, offset], function (err, results) {
@@ -1725,25 +1675,6 @@ router.get('/:pid/replies', function (req, res, next) {
   });
 
   // 겟커넥션 - 페이징!! + 거의 다갖고옴...=상세보기&댓글?  - 끝??
-
-
-  var result = {
-    "success": {
-      "message": "글 댓글 불러오기 성공",
-      "page": 2,
-      "pageLimit": 10,
-      "data": [{
-        "title": "제목",
-        "date": "작성일시",
-        "genre": "장르",
-        "position": "포지션",
-        "nickname": "작성자",
-        "photo": "./public/profile/xxx.jpg",
-        "pid": "매칭/스토리번호"
-      }]
-    }
-  };
-
 
 });
 
