@@ -1348,6 +1348,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
       }
     } else {  //flag !== people& !== story!!   = 전체 !!!  게시글
       if (keyword === undefined || keyword === null || keyword === "") {
+        var id2="";
         if ( !(pid === undefined || pid ===null || pid === "") ) {
           id2 = " p.id=" + pid + " and ";
         }
@@ -1356,7 +1357,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
           ", limit_people, decide_people, u.id as 'mid', photo_path as 'profile' " +
           "       ,genre, position " +
           "FROM matchdb.post p   join matchdb.user u on(u.id = p.user_id) " +
-          "WHERE "+id2+" u.id IS NOT NULL " ;
+          "WHERE "+id2+" p.id IS NOT NULL " ;
         if ( !(mid === undefined || mid ===null || mid === "") ) {
             sql = sql + " and u.id=" + mid + " ";
         }
@@ -1446,7 +1447,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
     if (err) {
       var err = {
         "message": "게시글이 목록조회를 실패 했습니다."
-      }
+      };
       Logger.log('debug', '/posts (POST)', err);
       next(err);
     } else {
