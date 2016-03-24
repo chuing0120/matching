@@ -6,6 +6,8 @@ var path = require('path');
 var s3Config = require('../config/s3Config');
 var async = require('async');
 var fs = require('fs');
+var util = require('util');
+var logger = require('../config/logging');
 
 var router = express.Router();
 
@@ -130,10 +132,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
             });
           }
 
-// todo 개수 다를때 라든지.. ㅜㅜ  언디파인(=공백=낫널..)이면 널로 넣어야할듯?
           function insertInterests(callback) {
-// sql: 'insert into matchdb.interest (post_id, genre, position)     values ( 79, \'0\'  ~ 1 2 , NULL)' }
-            //왜 널이여..
             var sql = "insert into matchdb.interest (post_id, genre, position) " +
               "    values ( ?, ?, ?)";
             async.each(interest, function (item, callback) {
@@ -250,8 +249,9 @@ router.post('/', isLoggedIn, function (req, res, next) {
     });
 
     form.parse(req, function (err, fields, files) {
-//      console.log('필즈2',formFields);
       var results = [];
+
+      logger.log('debug', 'fields => ', util.inspect(fields));
 
       function deleteS3Links() {
         async.each(results, function (item, cb) {
@@ -1430,7 +1430,7 @@ router.get('/', isLoggedIn, function (req, res, next) {
 
 // 11. 매칭/스토리 댓글쓰기    //req.user.id 없으면 터짐 ㅜㅜ (로그인 안되있으면 )
 router.post('/:pid/replies', isLoggedIn, function (req, res, next) {
-  var userId = req.user.id;  //오 있으면 안터짐
+  var pid = req.params.pid;  //오 있으면 안터짐
 // 겟커넥션  댓글 쓰기(닉넴=세션(패포)ㄱㄱ)올..ㅋ   끝???
 
   function getConnecton(callback) {
@@ -1460,6 +1460,10 @@ router.post('/:pid/replies', isLoggedIn, function (req, res, next) {
 
   async.waterfall([getConnecton, insertReply], function (err, results) {
     if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
+      var err = {
+        "message" : "댓글이 작성 실패되었습니다."
+      };
+      Logger.log('warn', '/posts (POST)' + result.success.message);
       next(err);  //워터폴중에 에러나면 바로 여기로!!!!!!
     } else {    //동적 프로퍼티 생성?!?!
       var result = {
@@ -1472,6 +1476,7 @@ router.post('/:pid/replies', isLoggedIn, function (req, res, next) {
           }
         }
       };
+      Logger.log('warn', '/posts/'+pid+'/replies (POST)' + result.success.message);
       res.json(result);        //더미!!!!응답!!!!!!
     }
   });
