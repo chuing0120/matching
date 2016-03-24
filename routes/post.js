@@ -251,6 +251,16 @@ router.post('/', isLoggedIn, function (req, res, next) {
     form.parse(req, function (err, fields, files) {
       var results = [];
 
+
+      var user = {
+        "id": req.user.id,
+        "title": fields.title,
+        "content": fields.content,
+        "limit": fields.limit,  //  언디파인이면 게시글
+        "decide": fields.decide, //  값 존재 = 매칭!!
+        "genre": fields.genre,  // 장르 받아옴
+        "position": fields.position, // 포지션받아옴
+      };
       logger.log('debug', 'fields => ', util.inspect(fields));
 
       function deleteS3Links() {
