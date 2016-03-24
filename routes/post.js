@@ -721,6 +721,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
         }
 
         if (user.limit === undefined || user.limit === 0) { //됨
+          logger.log('debug', '======================');
           async.waterfall([getConnection, insertPost], function (err, result) {
             if (err) {  //selectMember????? 왜필요하더라.. id 겟??  중복가입 방지인가??
               var err = {
