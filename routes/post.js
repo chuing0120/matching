@@ -256,12 +256,14 @@ router.post('/', isLoggedIn, function (req, res, next) {
         "id": req.user.id,
         "title": fields.title,
         "content": fields.content,
-        "limit": fields.limit,  //  언디파인이면 게시글
-        "decide": fields.decide, //  값 존재 = 매칭!!
+        "limit": fields.limit_people,  //  언디파인이면 게시글
+        "decide": fields.decide_people, //  값 존재 = 매칭!!
         "genre": fields.genre,  // 장르 받아옴
         "position": fields.position, // 포지션받아옴
       };
       logger.log('debug', 'fields => ', util.inspect(fields));
+
+      logger.log('debug', 'user => ', util.inspect(user));
 
       function deleteS3Links() {
         async.each(results, function (item, cb) {
