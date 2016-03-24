@@ -639,7 +639,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
           }
         });
       } else if (!files['photo']) { // 사진을 올리지 않은 경우
-
+        logger.log('debug', 'user0 => ', util.inspect(user));
         //전역으로 주면 없다고 에러남 ㅜㅜ
         var user = {
           "id": req.user.id,
@@ -650,6 +650,7 @@ router.post('/', isLoggedIn, function (req, res, next) {
           "genre": fields.genre,  // 장르 받아옴
           "position": fields.position, // 포지션받아옴
         };
+        logger.log('debug', 'user2 => ', util.inspect(user));
         function insertPost(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
           var sql = "insert into matchdb.post (user_id, content) " +
             "    values ( ?, ?)";        //1=user.id
