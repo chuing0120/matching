@@ -641,7 +641,15 @@ router.post('/', isLoggedIn, function (req, res, next) {
       } else if (!files['photo']) { // 사진을 올리지 않은 경우
 
         //전역으로 주면 없다고 에러남 ㅜㅜ
-
+        var user = {
+          "id": req.user.id,
+          "title": fields.title,
+          "content": fields.content,
+          "limit": fields.limit_people,  //  언디파인이면 게시글
+          "decide": fields.decide_people, //  값 존재 = 매칭!!
+          "genre": fields.genre,  // 장르 받아옴
+          "position": fields.position, // 포지션받아옴
+        };
         function insertPost(connection, callback) {   //커넥션 필요...=겟커넥션.. ㅇㅇ db SELECT!!!
           var sql = "insert into matchdb.post (user_id, content) " +
             "    values ( ?, ?)";        //1=user.id
