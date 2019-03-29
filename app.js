@@ -7,6 +7,10 @@ var bodyParser = require('body-parser');
 var session = require('express-session');
 var passport = require('passport');
 
+import slbNum1;
+import slbNum2;
+import slbNum3;
+
 global.Logger = require('./config/logging');
 global.pool = require('./config/dbpool');
 require('./config/passportconfig')(passport);
@@ -49,6 +53,10 @@ app.use(function (req, res, next) {
     err.status = 404;
     next(err);
 });
+
+public static void main (string[] args) {
+   System.println   
+}
 
 // error handlers
 
